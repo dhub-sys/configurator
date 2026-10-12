@@ -47,3 +47,15 @@ Version 1.1.0:
 - Category settings determine rendering, client validation, server validation and cart/order metadata.
 - Existing categories default to both options enabled.
 - If product belongs to multiple selected categories, deepest term takes precedence, then lowest term ID.
+
+Version 1.1.6:
+- Fix: Platinum/Silver could be offered at the Gold price when their price field was empty.
+  The price field is now the ONLY source of truth: empty, 0 or invalid = metal not offered.
+- Single save path through WooCommerce CRUD; removed the extra "_available" flags and the
+  direct database writes that could get out of sync with WooCommerce's object cache.
+- One-time migration on first admin page load: where the old flag said "not available",
+  the stale price is deleted too, so no hidden metal reappears.
+- Front-end: the browser receives the list of available metals; a stale radio for a metal
+  without a price is removed, and a non-gold metal is never shown with the gold price.
+- Cart: alternative metal prices are read live from the product; a line whose metal is no
+  longer offered is removed on cart load and blocks checkout.

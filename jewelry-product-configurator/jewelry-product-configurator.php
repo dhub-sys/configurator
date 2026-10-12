@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και συστήματος/μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce.
- * Version: 1.1.5
+ * Version: 1.1.6
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,23 +14,28 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.1.5';
+    const VERSION = '1.1.6';
     private static $rendered = false;
+
+    /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
+    const METAL_PRICE_KEYS = ['platinum' => '_jpc_platinum_price', 'silver' => '_jpc_silver_price'];
+    /** Legacy (≤1.1.5) availability flags, migrated away in 1.1.6. */
+    const LEGACY_FLAG_KEYS = ['platinum' => '_jpc_platinum_available', 'silver' => '_jpc_silver_available'];
+    const DB_VERSION_OPTION = 'jpc_db_version';
 
     public static function init() {
         add_action('woocommerce_product_options_pricing', [__CLASS__, 'platinum_admin_field']);
         add_action('woocommerce_product_options_pricing', [__CLASS__, 'silver_admin_field']);
         add_action('woocommerce_product_options_general_product_data', [__CLASS__, 'yellow_gold_image_admin_field']);
-        add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_platinum_admin_field']);
-        add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_silver_admin_field']);
-        add_action('woocommerce_admin_process_product_object', [__CLASS__, 'sync_metal_availability'], 999);
-        // Cleanup runs after WooCommerce persists the product and clears duplicate/stale meta records.
-        add_action('woocommerce_process_product_meta', [__CLASS__, 'finalize_metal_price_meta'], 100, 1);
+        // Single save path for the metal prices, through WooCommerce CRUD only.
+        add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_metal_prices'], 999);
         add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_yellow_gold_image_admin_field']);
         add_action('woocommerce_before_calculate_totals', [__CLASS__, 'apply_cart_prices'], 20);
         add_action('woocommerce_cart_loaded_from_session', [__CLASS__, 'remove_unavailable_cart_metals'], 30);
+        add_action('woocommerce_check_cart_items', [__CLASS__, 'validate_cart_metals']);
         add_action('admin_menu', [__CLASS__, 'admin_menu']);
         add_action('admin_init', [__CLASS__, 'register_settings']);
+        add_action('admin_init', [__CLASS__, 'maybe_migrate']);
         add_action('admin_notices', [__CLASS__, 'dependency_notice']);
         add_action('wp_enqueue_scripts', [__CLASS__, 'assets']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'admin_assets']);
@@ -43,139 +48,103 @@ final class JPC_Product_Configurator {
         add_filter('woocommerce_get_item_data', [__CLASS__, 'deduplicate_cart_data'], PHP_INT_MAX, 2);
         add_action('woocommerce_checkout_create_order_line_item', [__CLASS__, 'save_order_item'], 10, 4);
     }
-    /** Additional price, stored per simple product using WooCommerce decimal format. */
+    /** Final product price for Platinum, stored per simple product using WooCommerce decimal format. */
     public static function platinum_admin_field() {
+        self::metal_admin_field('platinum', 'Τιμή Πλατίνας',
+            'Τελική τιμή προϊόντος σε Πλατίνα. Αν μείνει κενή (ή 0), η Πλατίνα δεν διατίθεται και δεν εμφανίζεται. Υποστηρίζεται σε απλά προϊόντα.');
+    }
+    /** Final product price for Silver. An empty value means unavailable. */
+    public static function silver_admin_field() {
+        self::metal_admin_field('silver', 'Τιμή Ασημιού',
+            'Τελική τιμή προϊόντος σε Ασήμι. Αν μείνει κενή (ή 0), το Ασήμι δεν διατίθεται και δεν εμφανίζεται. Υποστηρίζεται σε απλά προϊόντα.');
+    }
+    private static function metal_admin_field($metal, $label, $description) {
         global $product_object;
         if (!function_exists('woocommerce_wp_text_input')) return;
+        $key = self::METAL_PRICE_KEYS[$metal];
         woocommerce_wp_text_input([
-            'id' => '_jpc_platinum_price',
-            'label' => 'Τιμή Πλατίνας (' . get_woocommerce_currency_symbol() . ')',
-            'description' => 'Προαιρετική τελική τιμή προϊόντος για επιλογή Πλατίνας. Αν μείνει κενή, η Πλατίνα δεν είναι διαθέσιμη και δεν εμφανίζεται. Υποστηρίζεται σε απλά προϊόντα.',
+            'id' => $key,
+            'label' => $label . ' (' . get_woocommerce_currency_symbol() . ')',
+            'description' => $description,
             'desc_tip' => true,
             'data_type' => 'price',
-            'value' => $product_object ? $product_object->get_meta('_jpc_platinum_price', true, 'edit') : '',
+            'placeholder' => 'Δεν διατίθεται',
+            'value' => $product_object ? $product_object->get_meta($key, true, 'edit') : '',
         ]);
-        self::availability_admin_hint($product_object, 'platinum');
-    }
-    public static function save_platinum_admin_field($product) {
-        if (!$product || !$product->is_type('simple')) return;
-        $value = isset($_POST['_jpc_platinum_price']) && is_scalar($_POST['_jpc_platinum_price'])
-            ? wc_clean(wp_unslash($_POST['_jpc_platinum_price'])) : '';
-        if ($value === '') {
-            $product->delete_meta_data('_jpc_platinum_price');
-        } else {
-            $decimal = wc_format_decimal($value);
-            if (is_numeric($decimal) && (float)$decimal >= 0) {
-                $product->update_meta_data('_jpc_platinum_price', $decimal);
-            }
+        if ($product_object && $product_object->is_type('simple')) {
+            $active = self::metal_price($product_object, $metal) !== '';
+            echo '<p class="form-field"><span class="description" style="margin-left:162px;display:block">'
+                . ($active ? '✔ Διαθέσιμο στο κατάστημα.' : '✘ Δεν εμφανίζεται στο κατάστημα.') . '</span></p>';
         }
+    }
+    /** Normalize a submitted/stored price. Returns '' when it does not make the metal available. */
+    private static function normalize_price($raw) {
+        if (!is_scalar($raw)) return '';
+        $raw = trim((string) $raw);
+        if ($raw === '') return '';
+        $decimal = wc_format_decimal($raw);
+        // 0 is treated as "not available": a jewel is never sold for free, and
+        // imports/bulk tools often write 0 where the shop meant "empty".
+        return is_numeric($decimal) && (float) $decimal > 0 ? (string) $decimal : '';
     }
     /**
-     * The pricing fields are persisted via CRUD above. Some shops may have older
-     * duplicate postmeta rows or a late save hook restoring the old value.
-     * Normalize the final database state after WooCommerce has saved the product.
-     * An empty field deletes ALL rows for the metal; it must never mean gold price.
+     * The price field is the ONLY source of truth for a metal's availability.
+     * Blank/invalid → every meta row for that metal is removed.
      */
-    public static function finalize_metal_price_meta($product_id) {
-        $product_id = absint($product_id);
-        if (!$product_id || !current_user_can('edit_post', $product_id)) return;
-        $product = wc_get_product($product_id);
+    public static function save_metal_prices($product) {
         if (!$product || !$product->is_type('simple')) return;
-        foreach (['_jpc_platinum_price', '_jpc_silver_price'] as $key) {
+        foreach (self::METAL_PRICE_KEYS as $metal => $key) {
+            // Fields not posted (quick edit, REST, etc.) leave the stored value untouched.
             if (!array_key_exists($key, $_POST)) continue;
-            $raw = wp_unslash($_POST[$key]);
-            if (!is_scalar($raw)) continue;
-            $value = trim((string) wc_clean($raw));
-            if ($value === '') {
-                // Delete duplicate/legacy rows too; Woo CRUD delete_meta_data()
-                // alone can leave stale values in installations with duplicate meta.
-                delete_post_meta($product_id, $key);
-            } else {
-                $decimal = wc_format_decimal($value);
-                if (is_numeric($decimal) && (float) $decimal >= 0) {
-                    delete_post_meta($product_id, $key);
-                    add_post_meta($product_id, $key, $decimal, true);
-                }
-            }
-        }
-        // Explicit availability is authoritative even if another integration
-        // restores an old price meta row after a blank save.
-        foreach (['_jpc_platinum_price' => '_jpc_platinum_available', '_jpc_silver_price' => '_jpc_silver_available'] as $price_key => $available_key) {
-            if (!array_key_exists($price_key, $_POST) || !is_scalar($_POST[$price_key])) continue;
-            $submitted = trim((string) wc_clean(wp_unslash($_POST[$price_key])));
-            $decimal = $submitted !== '' ? wc_format_decimal($submitted) : '';
-            update_post_meta($product_id, $available_key,
-                $submitted !== '' && is_numeric($decimal) && (float) $decimal >= 0 ? 'yes' : 'no');
-        }
-        clean_post_cache($product_id);
-        if (function_exists('wc_delete_product_transients')) wc_delete_product_transients($product_id);
-    }
-    /** Availability is persisted in the SAME WooCommerce CRUD save as its price. */
-    public static function sync_metal_availability($product) {
-        if (!$product || !$product->is_type('simple')) return;
-        foreach (['_jpc_platinum_price' => '_jpc_platinum_available', '_jpc_silver_price' => '_jpc_silver_available'] as $price_key => $flag_key) {
-            if (!isset($_POST[$price_key]) || !is_scalar($_POST[$price_key])) continue;
-            $raw = trim((string) wc_clean(wp_unslash($_POST[$price_key])));
-            $decimal = $raw === '' ? '' : wc_format_decimal($raw);
-            $valid = $raw !== '' && is_numeric($decimal) && (float) $decimal >= 0;
-            if ($valid) {
-                $product->update_meta_data($price_key, $decimal);
-                $product->update_meta_data($flag_key, 'yes');
-            } else {
-                $product->delete_meta_data($price_key);
-                $product->update_meta_data($flag_key, 'no');
-            }
+            $price = self::normalize_price(wc_clean(wp_unslash($_POST[$key])));
+            // delete_meta_data() removes every row with this key, including legacy duplicates.
+            $product->delete_meta_data($key);
+            if ($price !== '') $product->add_meta_data($key, $price, true);
+            $product->delete_meta_data(self::LEGACY_FLAG_KEYS[$metal]);
         }
     }
-    /** Admin-only diagnostics: show the product values actually read by this plugin. */
-    private static function availability_admin_hint($product, $metal) {
-        if (!$product || !$product->is_type('simple')) return;
-        $key = $metal === 'platinum' ? '_jpc_platinum_price' : '_jpc_silver_price';
-        $flag = $metal === 'platinum' ? '_jpc_platinum_available' : '_jpc_silver_available';
-        $price = trim((string) $product->get_meta($key, true, 'edit'));
-        $availability = (string) $product->get_meta($flag, true, 'edit');
-        $active = $metal === 'platinum' ? self::platinum_price($product) : self::silver_price($product);
-        echo '<p class="form-field"><span class="description" style="margin-left:162px;display:block">JPC έλεγχος (' . esc_html($metal) . '): αποθηκευμένη τιμή <code>' . esc_html($price === '' ? '[κενή]' : $price) . '</code>, ένδειξη <code>' . esc_html($availability === '' ? '[καμία]' : $availability) . '</code>, διαθεσιμότητα <strong>' . esc_html($active === '' ? 'ΟΧΙ' : 'ΝΑΙ') . '</strong>.</span></p>';
+    /** Price of an alternative metal for this product, or '' if that metal is not offered. */
+    private static function metal_price($product, $metal) {
+        if (!$product || !$product->is_type('simple') || !isset(self::METAL_PRICE_KEYS[$metal])) return '';
+        return self::normalize_price($product->get_meta(self::METAL_PRICE_KEYS[$metal], true, 'edit'));
     }
     private static function platinum_price($product) {
-        if (!$product || !$product->is_type('simple')) return '';
-        // An explicitly blank field makes Platinum unavailable, never Gold-priced.
-        if ($product->get_meta('_jpc_platinum_available', true) === 'no') return '';
-        $value = trim((string) $product->get_meta('_jpc_platinum_price', true));
-        return $value !== '' && is_numeric($value) && (float)$value >= 0 ? $value : '';
-    }
-    /** Optional silver alternative for simple products. An empty value means unavailable. */
-    public static function silver_admin_field() {
-        global $product_object;
-        if (!function_exists('woocommerce_wp_text_input')) return;
-        woocommerce_wp_text_input([
-            'id' => '_jpc_silver_price',
-            'label' => 'Τιμή Ασημιού (' . get_woocommerce_currency_symbol() . ')',
-            'description' => 'Αφήστε κενό για να μην εμφανίζεται η επιλογή Ασήμι στο συγκεκριμένο προϊόν.',
-            'desc_tip' => true,
-            'data_type' => 'price',
-            'value' => $product_object ? $product_object->get_meta('_jpc_silver_price', true, 'edit') : '',
-        ]);
-        self::availability_admin_hint($product_object, 'silver');
-    }
-    public static function save_silver_admin_field($product) {
-        if (!$product || !$product->is_type('simple')) return;
-        $value = isset($_POST['_jpc_silver_price']) && is_scalar($_POST['_jpc_silver_price'])
-            ? wc_clean(wp_unslash($_POST['_jpc_silver_price'])) : '';
-        if ($value === '') {
-            $product->delete_meta_data('_jpc_silver_price');
-        } else {
-            $decimal = wc_format_decimal($value);
-            if (is_numeric($decimal) && (float)$decimal >= 0) {
-                $product->update_meta_data('_jpc_silver_price', $decimal);
-            }
-        }
+        return self::metal_price($product, 'platinum');
     }
     private static function silver_price($product) {
-        if (!$product || !$product->is_type('simple')) return '';
-        if ($product->get_meta('_jpc_silver_available', true) === 'no') return '';
-        $value = trim((string) $product->get_meta('_jpc_silver_price', true));
-        return $value !== '' && is_numeric($value) && (float)$value >= 0 ? $value : '';
+        return self::metal_price($product, 'silver');
+    }
+    /**
+     * 1.1.5 and earlier kept a separate "_available" flag that could disagree with
+     * the price meta. Make the price authoritative once: where the flag said "no",
+     * drop the (stale) price as well, so nothing that was hidden reappears.
+     */
+    public static function maybe_migrate() {
+        if (get_option(self::DB_VERSION_OPTION) === self::VERSION) return;
+        global $wpdb;
+        foreach (self::LEGACY_FLAG_KEYS as $metal => $flag_key) {
+            $price_key = self::METAL_PRICE_KEYS[$metal];
+            $hidden = $wpdb->get_col($wpdb->prepare(
+                "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = 'no'", $flag_key));
+            foreach ($hidden as $product_id) {
+                delete_post_meta((int) $product_id, $price_key);
+            }
+            $flagged = $wpdb->get_col($wpdb->prepare(
+                "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s", $flag_key));
+            foreach ($flagged as $product_id) {
+                delete_post_meta((int) $product_id, $flag_key);
+                self::flush_product_cache((int) $product_id);
+            }
+        }
+        update_option(self::DB_VERSION_OPTION, self::VERSION, false);
+    }
+    private static function flush_product_cache($product_id) {
+        clean_post_cache($product_id);
+        if (function_exists('wc_delete_product_transients')) wc_delete_product_transients($product_id);
+        // WooCommerce keeps its own CRUD meta cache, which direct postmeta writes do not clear.
+        if (class_exists('WC_Cache_Helper') && method_exists('WC_Cache_Helper', 'invalidate_cache_group')) {
+            WC_Cache_Helper::invalidate_cache_group('object_' . $product_id);
+        }
     }
 
     /** Optional alternate main image used for Χρυσός → Κίτρινο χρυσό. */
@@ -258,33 +227,30 @@ final class JPC_Product_Configurator {
             if (empty($cart_item['jc_config']) || !isset($cart_item['jc_config']['metal_type'])) continue;
             $product = isset($cart_item['data']) ? $cart_item['data'] : null;
             if (!$product || !$product->is_type('simple')) continue;
-            // The base price is obtained from the stored cart snapshot, preventing
-            // repeated total calculations from compounding price changes.
-            if (isset($cart_item['jpc_base_price']) && is_numeric($cart_item['jpc_base_price'])) {
-                $base_price = (float)$cart_item['jpc_base_price'];
-            } else {
-                $base_price = (float)$product->get_price('edit');
-            }
             $metal = $cart_item['jc_config']['metal_type'];
-            $price_key = $metal === 'platinum' ? 'jpc_platinum_price' : ($metal === 'silver' ? 'jpc_silver_price' : '');
-            if ($price_key !== '' && isset($cart_item[$price_key]) &&
-                $cart_item[$price_key] !== '' && is_numeric($cart_item[$price_key])) {
-                $selected_price = (float)$cart_item[$price_key];
-                $product->set_price($selected_price);
-                // Alternate metals are distinct configurations, NOT a discount/sale.
-                $product->set_regular_price($selected_price);
-                $product->set_sale_price('');
-            } else {
-                // Never silently charge the Gold price for unavailable alternative metals.
-                if ($metal !== 'gold') continue;
-                $product->set_price($base_price);
-                // The selected base is displayed as its actual price, not a sale.
-                // Avoid changing unrelated product regular/sale fields if the store
-                // has a genuine WooCommerce sale configured for the gold option.
-                if (isset($cart_item['jpc_base_on_sale']) && !$cart_item['jpc_base_on_sale']) {
-                    $product->set_regular_price($base_price);
-                    $product->set_sale_price('');
-                }
+            // Gold is the product's own WooCommerce price (including any real sale): leave it alone.
+            if ($metal === 'gold') continue;
+            // Read the live product price meta (not set_price()), so repeated
+            // total calculations can never compound, and admin edits apply.
+            $price = self::metal_price($product, $metal);
+            // An unavailable metal is removed on cart load (remove_unavailable_cart_metals)
+            // and rejected at checkout (validate_cart_metals); never price it as gold.
+            if ($price === '') continue;
+            $product->set_price((float) $price);
+            // Alternate metals are distinct configurations, NOT a discount/sale.
+            $product->set_regular_price((float) $price);
+            $product->set_sale_price('');
+        }
+    }
+    /** Last line of defence: block checkout for a non-gold line whose metal is no longer offered. */
+    public static function validate_cart_metals() {
+        if (!function_exists('WC') || !WC()->cart) return;
+        foreach (WC()->cart->get_cart() as $cart_item) {
+            $metal = $cart_item['jc_config']['metal_type'] ?? 'gold';
+            if ($metal === 'gold' || empty($cart_item['data'])) continue;
+            if (self::metal_price($cart_item['data'], $metal) === '') {
+                wc_add_notice(sprintf('Το προϊόν «%s» δεν διατίθεται πλέον στο επιλεγμένο μέταλλο. Αφαιρέστε το από το καλάθι.',
+                    $cart_item['data']->get_name()), 'error');
             }
         }
     }
@@ -424,6 +390,12 @@ final class JPC_Product_Configurator {
                 'hasPlatinumPrice' => $platinum !== '',
                 'silverHtml' => $silver === '' ? '' : wc_price(wc_get_price_to_display($product, ['price' => (float)$silver])),
                 'hasSilverPrice' => $silver !== '',
+                // Authoritative list for the browser: a metal missing here must not be offered.
+                'metals' => array_filter([
+                    'gold' => wc_price(wc_get_price_to_display($product)),
+                    'platinum' => $platinum === '' ? '' : wc_price(wc_get_price_to_display($product, ['price' => (float)$platinum])),
+                    'silver' => $silver === '' ? '' : wc_price(wc_get_price_to_display($product, ['price' => (float)$silver])),
+                ]),
                 'priceSelector' => '.jpc-live-price',
                 'fields' => self::category_fields($product->get_id()),
                 'images' => [
@@ -519,13 +491,6 @@ final class JPC_Product_Configurator {
         if ($cfg['metal_type'] !== 'gold' || !$enabled_fields['color']) $cfg['gold_color']='';
         if (!$enabled_fields['size']) { $cfg['size_system']=''; $cfg['ring_size']=''; }
         $cart_item_data['jc_config']=$cfg;
-        $product = wc_get_product($variation_id ?: $product_id);
-        if ($product && $product->is_type('simple')) {
-            $cart_item_data['jpc_base_price'] = $product->get_price('edit');
-            $cart_item_data['jpc_base_on_sale'] = $product->is_on_sale('edit');
-            $cart_item_data['jpc_platinum_price'] = self::platinum_price($product);
-            $cart_item_data['jpc_silver_price'] = self::silver_price($product);
-        }
         // Διαφορετικές διαμορφώσεις διαχωρίζονται κανονικά από το WooCommerce μέσω cart item data.
         return $cart_item_data;
     }

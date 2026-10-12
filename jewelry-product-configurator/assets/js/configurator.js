@@ -1,4 +1,4 @@
-/* Jewelry Product Configurator v1.1.0 - UI independent of YOOtheme form position. */
+/* Jewelry Product Configurator v1.1.6 - UI independent of YOOtheme form position. */
 jQuery(function ($) {
   'use strict';
   const $root = $('.jewelry-configurator[data-jc-configurator="1"]').first();
@@ -61,6 +61,20 @@ jQuery(function ($) {
   // CSS class `jpc-live-price` to the price element in the builder.
   // Common native WooCommerce price widgets also work without that class.
   const priceInfo = window.JPCPrices || null;
+  // Metal -> formatted price, as decided by the server. Only metals listed here
+  // may be offered; this protects against cached/duplicated markup that still
+  // shows a radio for a metal whose price field is now empty.
+  const metalPrices = (priceInfo && priceInfo.metals && typeof priceInfo.metals === 'object') ? priceInfo.metals : null;
+  function enforceAvailableMetals() {
+    if (!metalPrices) return;
+    $root.find('input[name="jc_metal_type_ui"]').each(function () {
+      if (this.value === 'gold' || metalPrices[this.value]) return;
+      const wasChecked = this.checked;
+      $(this).closest('label').remove();
+      if (wasChecked) $root.find('input[name="jc_metal_type_ui"][value="gold"]').prop('checked', true);
+    });
+  }
+  enforceAvailableMetals();
   // Save the original price text nodes, never replace the whole button HTML.
   // YOOtheme may append icons/SVGs to the button's After field.
   const originalPriceTexts = new WeakMap();
@@ -106,7 +120,15 @@ jQuery(function ($) {
   function updatePrice() {
     if (!priceInfo || !priceInfo.enabled) return;
     const metal = selected('jc_metal_type_ui');
-    const alternativeHtml = metal === 'platinum' ? priceInfo.platinumHtml : (metal === 'silver' ? priceInfo.silverHtml : '');
+    const alternativeHtml = metal === 'gold' ? '' : (metalPrices
+      ? (metalPrices[metal] || '')
+      : (metal === 'platinum' ? priceInfo.platinumHtml : (metal === 'silver' ? priceInfo.silverHtml : '')));
+    // Never present the gold price for another metal: if a non-gold metal has no
+    // price it is not available, so fall back to gold explicitly.
+    if (metal !== 'gold' && !alternativeHtml) {
+      $root.find('input[name="jc_metal_type_ui"][value="gold"]').prop('checked', true).trigger('change');
+      return;
+    }
     const $targets = locatePrices();
     $targets.each(function () {
       // Only replace the text node containing the price; leave the existing
@@ -301,7 +323,8 @@ jQuery(function ($) {
     const vals = values();
     const allowed = vals.jc_size_system === 'eu' ? euSizes : vals.jc_size_system === 'us' ? usSizes : [];
     const checks = {
-      jc_metal_box: $root.find('input[name="jc_metal_type_ui"]:checked').length === 1,
+      jc_metal_box: $root.find('input[name="jc_metal_type_ui"]:checked').length === 1 &&
+        (!metalPrices || vals.jc_metal_type === 'gold' || !!metalPrices[vals.jc_metal_type]),
       jc_color_box: !hasColor || vals.jc_metal_type !== 'gold' || ['λευκόχρυσο', 'κίτρινο χρυσό'].includes(vals.jc_gold_color),
       jc_size_system_box: !hasSize || ['eu', 'us'].includes(vals.jc_size_system),
       jc_size_box: !hasSize || allowed.includes(vals.jc_ring_size)
