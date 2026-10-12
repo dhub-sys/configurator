@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και συστήματος/μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.2.0';
+    const VERSION = '1.2.1';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -630,6 +630,18 @@ final class JPC_Product_Configurator {
         }
         if ($product && $product->is_type(['simple', 'variable'])) {
             $table = self::price_table($product);
+            // Hide metals this product does not offer with CSS printed in <head>, i.e.
+            // before the first paint. Otherwise a radio coming from cached HTML or from
+            // another source (old snippet, theme template) is visible until
+            // configurator.js removes it, and "flashes" on page load.
+            $hidden = array_diff(array_keys(self::METAL_PRICE_KEYS), array_keys($table));
+            if ($hidden) {
+                $selectors = [];
+                foreach ($hidden as $metal) {
+                    $selectors[] = '.jewelry-configurator label:has(> input[name="jc_metal_type_ui"][value="' . $metal . '"])';
+                }
+                wp_add_inline_style('jpc-configurator', implode(',', $selectors) . '{display:none!important}');
+            }
             $metals = [];   // HTML for the main price element when no variation is selected
             $labels = [];   // HTML next to each metal radio
             foreach ($table as $metal => $range) {
@@ -683,7 +695,7 @@ final class JPC_Product_Configurator {
             $sizes[$system] = array_map(static function ($v) { return ['v' => $v, 'l' => self::size_label($v)]; }, $values);
         }
         ob_start(); ?>
-        <div class="jewelry-configurator" data-jc-configurator="1" data-jc-has-color="<?php echo $config_fields['color'] ? '1' : '0'; ?>" data-jc-has-size="<?php echo $config_fields['size'] ? '1' : '0'; ?>" data-jc-sizes="<?php echo esc_attr(wp_json_encode($sizes)); ?>">
+        <div class="jewelry-configurator" data-jc-configurator="1" data-jc-has-color="<?php echo $config_fields['color'] ? '1' : '0'; ?>" data-jc-has-size="<?php echo $config_fields['size'] ? '1' : '0'; ?>" data-jc-sizes="<?php echo esc_attr(wp_json_encode($sizes)); ?>" data-jc-source="plugin-<?php echo esc_attr(self::VERSION); ?>">
           <div class="jc-grid">
             <div id="jc_metal_box" class="jc-box jc-box-full uk-card uk-card-conf uk-card-small uk-card-body uk-border-rounded">
               <h4 class="jc-box-title">Επιλογή Μετάλλου</h4>

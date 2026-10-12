@@ -76,3 +76,9 @@ Version 1.2.0:
   "Νούμερα EU/US" (from – to, step). Empty = defaults (EU 47–58, US 5–13 by 1).
   Step 0.5 gives half sizes; shown as "5,5" to customers and in orders.
 - Fix: broken CSS rule (missing closing brace) after the invalid ring-size style.
+
+Version 1.2.1:
+- No more "flash" of a metal the product does not offer: those options are hidden by
+  CSS printed in <head>, before the page is painted, whatever outputs them.
+- The plugin's configurator markup carries data-jc-source="plugin-<version>", so it can
+  be told apart from markup produced by an old snippet or a theme template.
