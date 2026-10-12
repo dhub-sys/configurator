@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και συστήματος/μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce.
- * Version: 1.2.2
+ * Version: 1.2.3
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.2.2';
+    const VERSION = '1.2.3';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -720,13 +720,18 @@ final class JPC_Product_Configurator {
             // another source (old snippet, theme template) is visible until
             // configurator.js removes it, and "flashes" on page load.
             $hidden = array_diff(array_keys(self::METAL_PRICE_KEYS), array_keys($table));
-            if ($hidden) {
-                $selectors = [];
-                foreach ($hidden as $metal) {
-                    $selectors[] = '.jewelry-configurator label:has(> input[name="jc_metal_type_ui"][value="' . $metal . '"])';
-                }
-                wp_add_inline_style('jpc-configurator', implode(',', $selectors) . '{display:none!important}');
+            $selectors = [];
+            foreach ($hidden as $metal) {
+                $selectors[] = '.jewelry-configurator label:has(> input[name="jc_metal_type_ui"][value="' . $metal . '"])';
             }
+            // Same for fields this product's category has switched off.
+            $fields = self::category_fields($product->get_id());
+            if (!$fields['size']) {
+                $selectors[] = '.jewelry-configurator #jc_size_system_box';
+                $selectors[] = '.jewelry-configurator #jc_size_box';
+            }
+            if (!$fields['color']) $selectors[] = '.jewelry-configurator #jc_color_box';
+            if ($selectors) wp_add_inline_style('jpc-configurator', implode(',', $selectors) . '{display:none!important}');
             $metals = [];   // HTML for the main price element when no variation is selected
             $labels = [];   // HTML next to each metal radio
             foreach ($table as $metal => $range) {
@@ -748,7 +753,10 @@ final class JPC_Product_Configurator {
                 'hasPlatinumPrice' => isset($metals['platinum']),
                 'hasSilverPrice' => isset($metals['silver']),
                 'priceSelector' => '.jpc-live-price',
-                'fields' => self::category_fields($product->get_id()),
+                'fields' => $fields,
+                // Diagnostics banner on the product page, only for shop managers.
+                'debug' => current_user_can('manage_woocommerce'),
+                'version' => self::VERSION,
                 'images' => $images ?? ['default' => [], 'yellowGold' => []],
             ]);
         }

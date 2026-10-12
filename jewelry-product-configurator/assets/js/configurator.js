@@ -1,11 +1,17 @@
-/* Jewelry Product Configurator v1.2.0 - UI independent of YOOtheme form position. */
+/* Jewelry Product Configurator v1.2.3 - UI independent of YOOtheme form position. */
 jQuery(function ($) {
   'use strict';
   const $root = $('.jewelry-configurator[data-jc-configurator="1"]').first();
   if (!$root.length) return;
 
-  const hasColor = $root.attr('data-jc-has-color') !== '0';
-  const hasSize = $root.attr('data-jc-has-size') !== '0';
+  // The category settings sent by the server win over the markup's attributes, so
+  // markup printed by something else (old snippet, theme template, page cache) still
+  // follows the current settings.
+  const serverFields = (window.JPCPrices && window.JPCPrices.fields) || null;
+  const hasColor = $root.attr('data-jc-has-color') !== '0' && !(serverFields && serverFields.color === false);
+  const hasSize = $root.attr('data-jc-has-size') !== '0' && !(serverFields && serverFields.size === false);
+  if (!hasColor) $root.find('#jc_color_box').remove();
+  if (!hasSize) $root.find('#jc_size_system_box, #jc_size_box').remove();
   // Ring sizes per system, configured per category: [{v: '5.5', l: '5,5'}, ...].
   const sizes = (function () {
     const fallback = {
@@ -477,4 +483,38 @@ jQuery(function ($) {
   syncMetalSpecifications();
   window.setTimeout(function () { syncMetalSpecifications(); updateGoldMaterial(); updateProductImage(); }, 300);
   window.setTimeout(function () { syncMetalSpecifications(); updateGoldMaterial(); updateProductImage(); }, 1000);
+
+  // Shop managers only: point out configurator markup/code that does not come from
+  // this plugin (it ignores the category settings). Visitors never see this.
+  if (priceInfo && priceInfo.debug) {
+    window.setTimeout(function () {
+      const issues = [];
+      const $all = $('.jewelry-configurator');
+      const foreign = $all.filter(function () { return !this.hasAttribute('data-jc-source'); });
+      if (foreign.length) issues.push(foreign.length + ' configurator χωρίς σήμανση του plugin (παλιό snippet ή HTML στο template του YOOtheme).');
+      if ($all.length > 1) issues.push('Βρέθηκαν ' + $all.length + ' configurators στη σελίδα.');
+      const $jw = $('[name^="jw_"], [id^="jw_"]');
+      if ($jw.length || window.JWRingCfg) issues.push('Ενεργός ο ξεχωριστός configurator δαχτυλιδιών (ring-configurator.js / πεδία jw_*' + (window.JWRingCfg ? ', JWRingCfg' : '') + ').');
+      $('script[src]').each(function () {
+        const src = this.getAttribute('src') || '';
+        if (/ring-configurator|jewelry-config\.js/i.test(src)) issues.push('Φορτώνεται παλιό script: ' + src.split('?')[0]);
+      });
+      if (serverFields && serverFields.size === false) {
+        const $sizes = $('select, input').filter(function () {
+          return !$(this).closest('[data-jc-source]').length && /size|μέγεθ|νούμερ/i.test((this.name || '') + ' ' + (this.id || ''));
+        }).filter(':visible');
+        if ($sizes.length) issues.push('Εμφανίζονται πεδία μεγέθους εκτός plugin: ' + $sizes.map(function () { return this.name || this.id; }).get().join(', '));
+      }
+      if (!issues.length) return;
+      const $box = $('<div>', {'class': 'jpc-debug'}).css({
+        border: '2px dashed #e10600', background: '#fff6f5', color: '#600', padding: '10px 12px', margin: '0 0 16px', fontSize: '13px', lineHeight: '1.5'
+      });
+      $box.append($('<strong>').text('Jewelry Configurator ' + (priceInfo.version || '') + ' — μόνο για διαχειριστές:'));
+      const $ul = $('<ul>').css({margin: '6px 0 0 18px'});
+      issues.forEach(function (text) { $ul.append($('<li>').text(text)); });
+      $box.append($ul);
+      $root.before($box);
+      if (window.console) console.warn('[Jewelry Configurator]', issues);
+    }, 1200);
+  }
 });

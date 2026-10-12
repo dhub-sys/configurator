@@ -92,3 +92,12 @@ Version 1.2.2:
   lowest category ID. Now a field is shown only if all of them enable it; the deepest
   category still takes precedence over its parents.
 - Product edit screen (General tab) shows which category settings apply to the product.
+
+Version 1.2.3:
+- Fields switched off for a category (ring size, gold colour) are hidden/removed even when
+  the configurator markup does not come from this plugin (old snippet, YOOtheme template,
+  cached HTML): CSS in <head> plus the server's category settings in configurator.js.
+- Diagnostics for shop managers only: a red dashed box above the configurator lists
+  foreign configurator markup, the separate ring configurator (ring-configurator.js /
+  jw_* fields / JWRingCfg), old scripts still loaded, and size fields shown outside the
+  plugin. Visitors never see it.
