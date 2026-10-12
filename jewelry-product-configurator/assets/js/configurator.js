@@ -1,4 +1,4 @@
-/* Jewelry Product Configurator v1.1.6 - UI independent of YOOtheme form position. */
+/* Jewelry Product Configurator v1.2.0 - UI independent of YOOtheme form position. */
 jQuery(function ($) {
   'use strict';
   const $root = $('.jewelry-configurator[data-jc-configurator="1"]').first();
@@ -6,8 +6,18 @@ jQuery(function ($) {
 
   const hasColor = $root.attr('data-jc-has-color') !== '0';
   const hasSize = $root.attr('data-jc-has-size') !== '0';
-  const euSizes = Array.from({length: 12}, (_, i) => String(47 + i));
-  const usSizes = Array.from({length: 9}, (_, i) => String(5 + i));
+  // Ring sizes per system, configured per category: [{v: '5.5', l: '5,5'}, ...].
+  const sizes = (function () {
+    const fallback = {
+      eu: Array.from({length: 12}, (_, i) => ({v: String(47 + i), l: String(47 + i)})),
+      us: Array.from({length: 9}, (_, i) => ({v: String(5 + i), l: String(5 + i)}))
+    };
+    try {
+      const parsed = JSON.parse($root.attr('data-jc-sizes') || '');
+      return parsed && Array.isArray(parsed.eu) && Array.isArray(parsed.us) ? parsed : fallback;
+    } catch (e) { return fallback; }
+  })();
+  const sizeValues = system => (sizes[system] || []).map(s => s.v);
   const fields = ['jc_metal_type', 'jc_gold_color', 'jc_size_system', 'jc_ring_size'];
   const selected = name => $root.find('input[name="' + name + '"]:checked').val() || '';
   const currentSize = () => String($root.find('#jc_ring_size').val() || '');
@@ -23,11 +33,11 @@ jQuery(function ($) {
     if (!hasSize) return;
     const previous = currentSize();
     const system = selected('jc_size_system_ui');
-    const options = system === 'eu' ? euSizes : system === 'us' ? usSizes : [];
+    const options = sizes[system] || [];
     const $select = $root.find('#jc_ring_size');
     $select.empty().append($('<option>', {value: '', text: 'Επιλέξτε νούμερο…'}));
-    options.forEach(n => $select.append($('<option>', {value: n, text: n})));
-    $select.val(options.includes(previous) ? previous : '');
+    options.forEach(n => $select.append($('<option>', {value: n.v, text: n.l})));
+    $select.val(sizeValues(system).includes(previous) ? previous : '');
   }
 
   function values() {
@@ -61,42 +71,126 @@ jQuery(function ($) {
   // CSS class `jpc-live-price` to the price element in the builder.
   // Common native WooCommerce price widgets also work without that class.
   const priceInfo = window.JPCPrices || null;
-  // Metal -> formatted price, as decided by the server. Only metals listed here
-  // may be offered; this protects against cached/duplicated markup that still
-  // shows a radio for a metal whose price field is now empty.
+  const isVariable = !!(priceInfo && priceInfo.variable);
+  // Metal -> price HTML for the product, as decided by the server. Only metals
+  // listed here may be offered; this protects against cached/duplicated markup
+  // that still shows a radio for a metal whose price field is now empty.
   const metalPrices = (priceInfo && priceInfo.metals && typeof priceInfo.metals === 'object') ? priceInfo.metals : null;
-  function enforceAvailableMetals() {
-    if (!metalPrices) return;
+  const metalLabels = (priceInfo && priceInfo.labels) || {};
+  // Variable products: the variation WooCommerce currently has selected (or null).
+  let currentVariation = null;
+
+  /** Metal -> price HTML for the current context, or null if unknown (no data). */
+  function availablePrices() {
+    if (currentVariation) return currentVariation.jpc_metals || {gold: currentVariation.price_html || ''};
+    return metalPrices;
+  }
+  function isAvailable(metal) {
+    const prices = availablePrices();
+    return metal === 'gold' || !prices || !!prices[metal];
+  }
+  function selectGold() {
+    $root.find('input[name="jc_metal_type_ui"][value="gold"]').prop('checked', true);
+  }
+
+  /**
+   * Remove metals the product never offers; for variable products, disable the
+   * metals the selected variation does not offer. Returns true if the selection
+   * had to fall back to gold.
+   */
+  function refreshAvailability() {
+    let fellBack = false;
     $root.find('input[name="jc_metal_type_ui"]').each(function () {
-      if (this.value === 'gold' || metalPrices[this.value]) return;
-      const wasChecked = this.checked;
-      $(this).closest('label').remove();
-      if (wasChecked) $root.find('input[name="jc_metal_type_ui"][value="gold"]').prop('checked', true);
+      if (this.value === 'gold') return;
+      const $label = $(this).closest('label');
+      if (metalPrices && !metalPrices[this.value]) {
+        if (this.checked) fellBack = true;
+        $label.remove();
+        return;
+      }
+      const ok = isAvailable(this.value);
+      $(this).prop('disabled', !ok);
+      $label.toggleClass('jc-unavailable', !ok).attr('title', ok ? null : (priceInfo.unavailableText || ''));
+      if (!ok && this.checked) fellBack = true;
+    });
+    if (fellBack) selectGold();
+    return fellBack;
+  }
+
+  function updateLabelPrices() {
+    if (!priceInfo || !priceInfo.showLabelPrices) return;
+    const prices = currentVariation ? availablePrices() : metalLabels;
+    $root.find('input[name="jc_metal_type_ui"]').each(function () {
+      const $span = $(this).closest('label').find('.jc-metal-price');
+      if (!$span.length) return;
+      const html = prices && prices[this.value];
+      if (html) $span.html(html); else $span.text(priceInfo.unavailableText || '');
     });
   }
-  enforceAvailableMetals();
-  // Save the original price text nodes, never replace the whole button HTML.
-  // YOOtheme may append icons/SVGs to the button's After field.
-  const originalPriceTexts = new WeakMap();
+
   // YOOtheme sometimes puts the currency sign in a separate text node, or
   // appends an icon after the price. Match the amount without requiring "€".
-  const amountPattern = /(?:\d{1,3}(?:[.\s\u00a0\u202f]\d{3})+|\d+)(?:[,.]\d{1,2})?/;
+  const amountPattern = /(?:\d{1,3}(?:[.\s  ]\d{3})+|\d+)(?:[,.]\d{1,2})?/;
+  const amountPatternAll = new RegExp(amountPattern.source, 'g');
 
-  function findPriceTextNode(element) {
+  function amountTextNodes(element) {
+    const nodes = [];
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) {
-      if (node.parentElement && node.parentElement.closest('svg,script,style,[uk-icon],.uk-icon')) continue;
-      if (amountPattern.test(node.nodeValue || '')) return node;
+      if (node.parentElement && node.parentElement.closest('svg,script,style,[uk-icon],.uk-icon,.screen-reader-text')) continue;
+      if (amountPattern.test(node.nodeValue || '')) nodes.push(node);
     }
-    return null;
+    return nodes;
+  }
+  /** Visible amounts in a price HTML snippet (ignores struck-through sale prices). */
+  function amountsFromHtml(html) {
+    const $tmp = $('<div>').html(html);
+    $tmp.find('.screen-reader-text, del').remove();
+    return $tmp.text().match(amountPatternAll) || [];
   }
 
-  function priceAmountFromHtml(html) {
-    const text = $('<div>').html(html).text().trim();
-    const match = text.match(amountPattern);
-    return match ? match[0] : '';
+  // Per price element: what it showed originally, so it can always be restored.
+  const priceStates = new WeakMap();
+  /**
+   * Show `html` in a price element, or restore its original content (html === null).
+   * A single amount (typical YOOtheme button with icons) is changed in its text node
+   * only, leaving the surrounding markup untouched. A price range (variable products)
+   * is replaced as a whole inside the smallest element that contains it.
+   */
+  function setPrice(element, html) {
+    let state = priceStates.get(element);
+    if (state && !element.contains(state.node || state.box)) state = null; // re-rendered
+    if (!state) {
+      if (html === null) return;
+      const nodes = amountTextNodes(element);
+      if (!nodes.length) return;
+      if (nodes.length === 1) {
+        const text = nodes[0].nodeValue;
+        state = {node: nodes[0], text: text, amount: text.match(amountPattern)[0]};
+      } else {
+        let box = nodes[0].parentNode;
+        while (box !== element && !nodes.every(n => box.contains(n))) box = box.parentNode;
+        state = {box: box, html: box.innerHTML, current: null};
+      }
+      priceStates.set(element, state);
+    }
+    if (state.node) {
+      let next = state.text;
+      if (html !== null) {
+        const amounts = amountsFromHtml(html);
+        if (amounts.length) {
+          const last = amounts[amounts.length - 1];
+          next = state.text.replace(state.amount, amounts.length > 1 && last !== amounts[0] ? amounts[0] + ' – ' + last : amounts[0]);
+        }
+      }
+      if (state.node.nodeValue !== next) state.node.nodeValue = next;
+    } else {
+      const next = html === null ? state.html : html;
+      if (state.current !== next) { state.box.innerHTML = next; state.current = next; }
+    }
   }
+
   const priceSelectors = [
     (priceInfo && priceInfo.priceSelector) || '.jpc-live-price',
     '.tm-element-woo-price .price',
@@ -109,9 +203,12 @@ jQuery(function ($) {
   function locatePrices() {
     if (!priceInfo || !priceInfo.enabled) return $();
     // Prefer the explicitly marked element, including if it lives outside a
-    // standard .product wrapper in a YOOtheme template.
+    // standard .product wrapper in a YOOtheme template. The selected variation's
+    // own price (inside the cart form) is handled separately.
     for (const selector of priceSelectors) {
-      const $matches = $(selector).filter(function () { return !$(this).closest('.jewelry-configurator').length; });
+      const $matches = $(selector).filter(function () {
+        return !$(this).closest('.jewelry-configurator, .woocommerce-variation-price, .single_variation_wrap').length;
+      });
       if ($matches.length) return $matches;
     }
     return $();
@@ -120,33 +217,29 @@ jQuery(function ($) {
   function updatePrice() {
     if (!priceInfo || !priceInfo.enabled) return;
     const metal = selected('jc_metal_type_ui');
-    const alternativeHtml = metal === 'gold' ? '' : (metalPrices
-      ? (metalPrices[metal] || '')
-      : (metal === 'platinum' ? priceInfo.platinumHtml : (metal === 'silver' ? priceInfo.silverHtml : '')));
+    const prices = availablePrices();
+    let html;
+    if (currentVariation) {
+      // Variation selected: show its price in the chosen metal (gold included).
+      html = (prices && prices[metal]) || (metal === 'gold' ? null : '');
+    } else if (metal === 'gold') {
+      html = null; // the page's own price
+    } else {
+      html = metalPrices ? (metalPrices[metal] || '')
+        : (metal === 'platinum' ? priceInfo.platinumHtml : (metal === 'silver' ? priceInfo.silverHtml : ''));
+    }
     // Never present the gold price for another metal: if a non-gold metal has no
     // price it is not available, so fall back to gold explicitly.
-    if (metal !== 'gold' && !alternativeHtml) {
-      $root.find('input[name="jc_metal_type_ui"][value="gold"]').prop('checked', true).trigger('change');
+    if (metal !== 'gold' && !html) {
+      selectGold();
+      $root.find('input[name="jc_metal_type_ui"][value="gold"]').trigger('change');
       return;
     }
-    const $targets = locatePrices();
-    $targets.each(function () {
-      // Only replace the text node containing the price; leave the existing
-      // YOOtheme button/link, After HTML, UK icons and SVG nodes untouched.
-      const node = findPriceTextNode(this);
-      if (!node) return;
-      if (!originalPriceTexts.has(node)) {
-        const originalText = node.nodeValue || '';
-        const match = originalText.match(amountPattern);
-        if (!match) return;
-        originalPriceTexts.set(node, {originalText, originalPrice: match[0]});
-      }
-      const state = originalPriceTexts.get(node);
-      const next = alternativeHtml
-        ? state.originalText.replace(state.originalPrice, priceAmountFromHtml(alternativeHtml))
-        : state.originalText;
-      if (node.nodeValue !== next) node.nodeValue = next;
-    });
+    locatePrices().each(function () { setPrice(this, html); });
+    // WooCommerce's own "selected variation" price inside the form.
+    if (currentVariation) {
+      $('.woocommerce-variation-price').each(function () { setPrice(this, metal === 'gold' ? null : html); });
+    }
   }
 
   // Synchronize the YOOtheme/UIkit Grid filter with the selected metal.
@@ -321,10 +414,9 @@ jQuery(function ($) {
 
   function validate() {
     const vals = values();
-    const allowed = vals.jc_size_system === 'eu' ? euSizes : vals.jc_size_system === 'us' ? usSizes : [];
+    const allowed = sizeValues(vals.jc_size_system);
     const checks = {
-      jc_metal_box: $root.find('input[name="jc_metal_type_ui"]:checked').length === 1 &&
-        (!metalPrices || vals.jc_metal_type === 'gold' || !!metalPrices[vals.jc_metal_type]),
+      jc_metal_box: $root.find('input[name="jc_metal_type_ui"]:checked').length === 1 && isAvailable(vals.jc_metal_type),
       jc_color_box: !hasColor || vals.jc_metal_type !== 'gold' || ['λευκόχρυσο', 'κίτρινο χρυσό'].includes(vals.jc_gold_color),
       jc_size_system_box: !hasSize || ['eu', 'us'].includes(vals.jc_size_system),
       jc_size_box: !hasSize || allowed.includes(vals.jc_ring_size)
@@ -334,7 +426,28 @@ jQuery(function ($) {
     return Object.values(checks).every(Boolean);
   }
 
-  $root.on('change', 'input[name="jc_metal_type_ui"]', function () {showColor(); syncFields(); updatePrice(); syncMetalSpecifications(); updateGoldMaterial(); updateProductImage();});
+  function onMetalChange() {showColor(); syncFields(); updatePrice(); syncMetalSpecifications(); updateGoldMaterial(); updateProductImage();}
+  $root.on('change', 'input[name="jc_metal_type_ui"]', onMetalChange);
+
+  // Variable products: follow WooCommerce's variation selection.
+  if (isVariable) {
+    $(document).on('found_variation show_variation', 'form.variations_form', function (event, variation) {
+      if (!variation) return;
+      currentVariation = variation;
+      refreshAvailability();
+      updateLabelPrices();
+      onMetalChange();
+    });
+    $(document).on('reset_data hide_variation', 'form.variations_form', function () {
+      if (!currentVariation) return;
+      currentVariation = null;
+      refreshAvailability();
+      updateLabelPrices();
+      onMetalChange();
+    });
+    // A default variation may already have been matched before this script ran.
+    window.setTimeout(function () { $('form.variations_form').trigger('check_variations'); }, 0);
+  }
   $root.on('change', 'input[name="jc_gold_color_ui"]', function () { syncFields(); updateGoldMaterial(); updateProductImage(); });
   $root.on('change', 'input[name="jc_size_system_ui"]', function () {populateSizes(); syncFields();});
   $root.on('change', '#jc_ring_size', syncFields);
@@ -352,6 +465,8 @@ jQuery(function ($) {
     if (!validate()) {event.preventDefault(); event.stopImmediatePropagation(); scrollToInvalidField(); return false;}
   });
 
+  refreshAvailability();
+  updateLabelPrices();
   showColor();
   populateSizes();
   syncFields();

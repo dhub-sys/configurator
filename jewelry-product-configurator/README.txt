@@ -59,3 +59,20 @@ Version 1.1.6:
   without a price is removed, and a non-gold metal is never shown with the gold price.
 - Cart: alternative metal prices are read live from the product; a line whose metal is no
   longer offered is removed on cart load and blocks checkout.
+
+Version 1.2.0:
+- Price next to each metal option on the product page ("Πλατίνα — 1.250 €").
+  For variable products it follows the selected variation; metals the variation
+  does not offer are shown greyed out as "δεν διατίθεται".
+  Setting: WooCommerce > Jewelry Configurator > Εμφάνιση τιμών.
+- Shop/category listings show "Από X €" when a metal is cheaper than gold
+  (e.g. silver). Not applied on the product's own page. Same settings section.
+- Products list (Products > All Products): new "Πλατίνα / Ασήμι" column and
+  Platinum/Silver price fields in Quick Edit (simple products).
+- Variable products: each variation has its own Platinum/Silver price fields
+  (Product data > Variations > pricing). Empty = that variation is not offered
+  in that metal. Gold is the variation's normal price.
+- Ring sizes per category: WooCommerce > Jewelry Configurator, columns
+  "Νούμερα EU/US" (from – to, step). Empty = defaults (EU 47–58, US 5–13 by 1).
+  Step 0.5 gives half sizes; shown as "5,5" to customers and in orders.
+- Fix: broken CSS rule (missing closing brace) after the invalid ring-size style.

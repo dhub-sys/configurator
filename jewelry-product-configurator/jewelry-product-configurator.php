@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και συστήματος/μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce.
- * Version: 1.1.6
+ * Version: 1.2.0
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,14 +14,23 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.1.6';
+    const VERSION = '1.2.0';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
     const METAL_PRICE_KEYS = ['platinum' => '_jpc_platinum_price', 'silver' => '_jpc_silver_price'];
     /** Legacy (≤1.1.5) availability flags, migrated away in 1.1.6. */
     const LEGACY_FLAG_KEYS = ['platinum' => '_jpc_platinum_available', 'silver' => '_jpc_silver_available'];
+    /** Variation fields use their own names so they never collide with the simple-product fields. */
+    const VARIATION_FIELD_NAMES = ['platinum' => '_jpc_var_platinum_price', 'silver' => '_jpc_var_silver_price'];
+    const METAL_LABELS = ['gold' => 'Χρυσός', 'platinum' => 'Πλατίνα', 'silver' => 'Ασήμι'];
     const DB_VERSION_OPTION = 'jpc_db_version';
+    const LABEL_PRICES_OPTION = 'jpc_show_label_prices';
+    const FROM_PRICE_OPTION = 'jpc_show_from_price';
+    /** Ring size defaults, used when a category has no custom range. */
+    const DEFAULT_SIZES = ['eu' => [47, 58, 1], 'us' => [5, 13, 1]];
+    /** Per-request cache of metal price tables, keyed by product ID. */
+    private static $price_tables = [];
 
     public static function init() {
         add_action('woocommerce_product_options_pricing', [__CLASS__, 'platinum_admin_field']);
@@ -30,6 +39,17 @@ final class JPC_Product_Configurator {
         // Single save path for the metal prices, through WooCommerce CRUD only.
         add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_metal_prices'], 999);
         add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_yellow_gold_image_admin_field']);
+        // Variable products: Platinum/Silver price per variation.
+        add_action('woocommerce_variation_options_pricing', [__CLASS__, 'variation_admin_fields'], 10, 3);
+        add_action('woocommerce_admin_process_variation_object', [__CLASS__, 'save_variation_metal_prices'], 10, 2);
+        add_filter('woocommerce_available_variation', [__CLASS__, 'variation_data'], 10, 3);
+        // Products list: metal price column + Quick Edit.
+        add_filter('manage_edit-product_columns', [__CLASS__, 'admin_columns'], 20);
+        add_action('manage_product_posts_custom_column', [__CLASS__, 'admin_column_content'], 10, 2);
+        add_action('woocommerce_product_quick_edit_end', [__CLASS__, 'quick_edit_fields']);
+        add_action('woocommerce_product_quick_edit_save', [__CLASS__, 'quick_edit_save']);
+        // Shop/category listings: "Από X €" when a metal is cheaper than gold.
+        add_filter('woocommerce_get_price_html', [__CLASS__, 'from_price_html'], 20, 2);
         add_action('woocommerce_before_calculate_totals', [__CLASS__, 'apply_cart_prices'], 20);
         add_action('woocommerce_cart_loaded_from_session', [__CLASS__, 'remove_unavailable_cart_metals'], 30);
         add_action('woocommerce_check_cart_items', [__CLASS__, 'validate_cart_metals']);
@@ -51,12 +71,12 @@ final class JPC_Product_Configurator {
     /** Final product price for Platinum, stored per simple product using WooCommerce decimal format. */
     public static function platinum_admin_field() {
         self::metal_admin_field('platinum', 'Τιμή Πλατίνας',
-            'Τελική τιμή προϊόντος σε Πλατίνα. Αν μείνει κενή (ή 0), η Πλατίνα δεν διατίθεται και δεν εμφανίζεται. Υποστηρίζεται σε απλά προϊόντα.');
+            'Τελική τιμή προϊόντος σε Πλατίνα. Αν μείνει κενή (ή 0), η Πλατίνα δεν διατίθεται και δεν εμφανίζεται. Σε προϊόντα με παραλλαγές, η τιμή ορίζεται σε κάθε παραλλαγή.');
     }
     /** Final product price for Silver. An empty value means unavailable. */
     public static function silver_admin_field() {
         self::metal_admin_field('silver', 'Τιμή Ασημιού',
-            'Τελική τιμή προϊόντος σε Ασήμι. Αν μείνει κενή (ή 0), το Ασήμι δεν διατίθεται και δεν εμφανίζεται. Υποστηρίζεται σε απλά προϊόντα.');
+            'Τελική τιμή προϊόντος σε Ασήμι. Αν μείνει κενή (ή 0), το Ασήμι δεν διατίθεται και δεν εμφανίζεται. Σε προϊόντα με παραλλαγές, η τιμή ορίζεται σε κάθε παραλλαγή.');
     }
     private static function metal_admin_field($metal, $label, $description) {
         global $product_object;
@@ -94,25 +114,112 @@ final class JPC_Product_Configurator {
     public static function save_metal_prices($product) {
         if (!$product || !$product->is_type('simple')) return;
         foreach (self::METAL_PRICE_KEYS as $metal => $key) {
-            // Fields not posted (quick edit, REST, etc.) leave the stored value untouched.
-            if (!array_key_exists($key, $_POST)) continue;
-            $price = self::normalize_price(wc_clean(wp_unslash($_POST[$key])));
-            // delete_meta_data() removes every row with this key, including legacy duplicates.
-            $product->delete_meta_data($key);
-            if ($price !== '') $product->add_meta_data($key, $price, true);
-            $product->delete_meta_data(self::LEGACY_FLAG_KEYS[$metal]);
+            // Fields not posted (REST, imports, etc.) leave the stored value untouched.
+            if (!array_key_exists($key, $_POST) || !is_scalar($_POST[$key])) continue;
+            self::set_metal_price($product, $metal, wc_clean(wp_unslash($_POST[$key])));
         }
     }
-    /** Price of an alternative metal for this product, or '' if that metal is not offered. */
+    /** Store a metal price on a product/variation object (not saved here). Blank/invalid removes it. */
+    private static function set_metal_price($product, $metal, $raw) {
+        $key = self::METAL_PRICE_KEYS[$metal];
+        $price = self::normalize_price($raw);
+        // delete_meta_data() removes every row with this key, including legacy duplicates.
+        $product->delete_meta_data($key);
+        if ($price !== '') $product->add_meta_data($key, $price, true);
+        $product->delete_meta_data(self::LEGACY_FLAG_KEYS[$metal]);
+        unset(self::$price_tables[$product->get_id()]);
+        if ($product->get_parent_id()) unset(self::$price_tables[$product->get_parent_id()]);
+    }
+    /** Price of an alternative metal for a simple product or a variation, or '' if not offered. */
     private static function metal_price($product, $metal) {
-        if (!$product || !$product->is_type('simple') || !isset(self::METAL_PRICE_KEYS[$metal])) return '';
+        if (!$product || !$product->is_type(['simple', 'variation']) || !isset(self::METAL_PRICE_KEYS[$metal])) return '';
         return self::normalize_price($product->get_meta(self::METAL_PRICE_KEYS[$metal], true, 'edit'));
     }
-    private static function platinum_price($product) {
-        return self::metal_price($product, 'platinum');
+
+    /* ------------------------------------------------------------------
+     * Variable products
+     * ------------------------------------------------------------------ */
+    public static function variation_admin_fields($loop, $variation_data, $variation) {
+        if (!function_exists('woocommerce_wp_text_input')) return;
+        $object = wc_get_product($variation);
+        $i = 0;
+        foreach (self::VARIATION_FIELD_NAMES as $metal => $name) {
+            woocommerce_wp_text_input([
+                'id' => $name . '_' . $loop,
+                'name' => $name . '[' . $loop . ']',
+                'label' => 'Τιμή ' . ($metal === 'platinum' ? 'Πλατίνας' : 'Ασημιού') . ' (' . get_woocommerce_currency_symbol() . ')',
+                'placeholder' => 'Δεν διατίθεται',
+                'description' => 'Κενό = η παραλλαγή δεν διατίθεται σε ' . ($metal === 'platinum' ? 'Πλατίνα' : 'Ασήμι') . '.',
+                'desc_tip' => true,
+                'data_type' => 'price',
+                'wrapper_class' => 'form-row ' . ($i++ % 2 ? 'form-row-last' : 'form-row-first'),
+                'value' => $object ? $object->get_meta(self::METAL_PRICE_KEYS[$metal], true, 'edit') : '',
+            ]);
+        }
     }
-    private static function silver_price($product) {
-        return self::metal_price($product, 'silver');
+    public static function save_variation_metal_prices($variation, $i) {
+        foreach (self::VARIATION_FIELD_NAMES as $metal => $name) {
+            if (!isset($_POST[$name]) || !is_array($_POST[$name]) || !array_key_exists($i, $_POST[$name])) continue;
+            self::set_metal_price($variation, $metal, wc_clean(wp_unslash($_POST[$name][$i])));
+        }
+    }
+    /** Metal prices for the selected variation, consumed by configurator.js. */
+    public static function variation_data($data, $product, $variation) {
+        if (!self::matches($product->get_id())) return $data;
+        $gold = $variation->get_price_html();
+        $metals = ['gold' => $gold !== '' ? $gold : wc_price(wc_get_price_to_display($variation))];
+        foreach (array_keys(self::METAL_PRICE_KEYS) as $metal) {
+            $price = self::metal_price($variation, $metal);
+            if ($price !== '') $metals[$metal] = wc_price(wc_get_price_to_display($variation, ['price' => (float) $price]));
+        }
+        $data['jpc_metals'] = $metals;
+        return $data;
+    }
+
+    /**
+     * Display prices (incl./excl. tax as the shop shows them) per metal:
+     * ['gold' => [min, max], 'platinum' => [min, max], ...]. Metals not offered are absent.
+     * Simple products have min === max; variable products span their visible variations.
+     */
+    private static function price_table($product) {
+        if (!$product) return [];
+        $id = $product->get_id();
+        if (isset(self::$price_tables[$id])) return self::$price_tables[$id];
+        $table = [];
+        if ($product->is_type('simple')) {
+            $gold = (float) wc_get_price_to_display($product);
+            $table['gold'] = [$gold, $gold];
+            foreach (array_keys(self::METAL_PRICE_KEYS) as $metal) {
+                $price = self::metal_price($product, $metal);
+                if ($price === '') continue;
+                $display = (float) wc_get_price_to_display($product, ['price' => (float) $price]);
+                $table[$metal] = [$display, $display];
+            }
+        } elseif ($product->is_type('variable')) {
+            // Only visible, purchasable variations (WooCommerce's own cached list).
+            $prices = $product->get_variation_prices(true);
+            $gold = isset($prices['price']) ? array_map('floatval', $prices['price']) : [];
+            if ($gold) $table['gold'] = [min($gold), max($gold)];
+            $ids = array_keys($gold);
+            if ($ids) update_meta_cache('post', $ids);
+            foreach (self::METAL_PRICE_KEYS as $metal => $key) {
+                $values = [];
+                foreach ($ids as $variation_id) {
+                    $price = self::normalize_price(get_post_meta($variation_id, $key, true));
+                    if ($price !== '') $values[] = (float) wc_get_price_to_display($product, ['price' => (float) $price]);
+                }
+                if ($values) $table[$metal] = [min($values), max($values)];
+            }
+        }
+        return self::$price_tables[$id] = $table;
+    }
+    /** "1.250,00 €" or "από 980,00 €" when the metal's price varies across variations. */
+    private static function range_html($range) {
+        return $range[0] == $range[1] ? wc_price($range[0]) : 'από ' . wc_price($range[0]);
+    }
+    /** Metals a product offers at all (for variable products: in at least one variation). */
+    private static function offered_metals($product) {
+        return array_keys(self::price_table($product)) ?: ['gold'];
     }
     /**
      * 1.1.5 and earlier kept a separate "_available" flag that could disagree with
@@ -197,10 +304,85 @@ final class JPC_Product_Configurator {
             'alt' => get_post_meta($attachment_id, '_wp_attachment_image_alt', true) ?: '',
         ];
     }
+    /* ------------------------------------------------------------------
+     * Products list: column + Quick Edit
+     * ------------------------------------------------------------------ */
+    public static function admin_columns($columns) {
+        $result = [];
+        foreach ($columns as $key => $label) {
+            $result[$key] = $label;
+            if ($key === 'price') $result['jpc_metals'] = 'Πλατίνα / Ασήμι';
+        }
+        if (!isset($result['jpc_metals'])) $result['jpc_metals'] = 'Πλατίνα / Ασήμι';
+        return $result;
+    }
+    public static function admin_column_content($column, $post_id) {
+        if ($column !== 'jpc_metals') return;
+        $product = wc_get_product($post_id);
+        if (!$product) return;
+        if ($product->is_type('variable')) {
+            $table = self::price_table($product);
+            foreach (['platinum' => 'Π', 'silver' => 'Α'] as $metal => $short) {
+                echo '<div>' . esc_html($short) . ': ' . (isset($table[$metal])
+                    ? wp_kses_post(self::range_html($table[$metal])) : '<span style="color:#999">—</span>') . '</div>';
+            }
+            echo '<div style="color:#999"><small>ανά παραλλαγή</small></div>';
+            return;
+        }
+        if (!$product->is_type('simple')) { echo '<span style="color:#999">—</span>'; return; }
+        $raw = [];
+        foreach (['platinum' => 'Π', 'silver' => 'Α'] as $metal => $short) {
+            $price = self::metal_price($product, $metal);
+            $raw[$metal] = $price === '' ? '' : wc_format_localized_price($price);
+            echo '<div>' . esc_html($short) . ': ' . ($price === '' ? '<span style="color:#999">—</span>' : wp_kses_post(wc_price($price))) . '</div>';
+        }
+        // Raw values for Quick Edit (read by admin-product.js).
+        echo '<div class="hidden jpc-inline-data" data-platinum="' . esc_attr($raw['platinum']) . '" data-silver="' . esc_attr($raw['silver']) . '"></div>';
+    }
+    public static function quick_edit_fields() {
+        echo '<div class="jpc-quick-edit" style="clear:both">';
+        foreach (self::METAL_PRICE_KEYS as $metal => $key) {
+            echo '<label><span class="title">' . esc_html($metal === 'platinum' ? 'Πλατίνα' : 'Ασήμι') . '</span>'
+                . '<span class="input-text-wrap"><input type="text" name="' . esc_attr($key) . '" class="text wc_input_price" placeholder="Δεν διατίθεται" value=""></span></label><br class="clear">';
+        }
+        echo '</div>';
+    }
+    /** Runs after WooCommerce has verified the Quick Edit nonce and saved the product. */
+    public static function quick_edit_save($product) {
+        if (!$product || !$product->is_type('simple') || !current_user_can('edit_post', $product->get_id())) return;
+        $changed = false;
+        foreach (self::METAL_PRICE_KEYS as $metal => $key) {
+            if (!array_key_exists($key, $_POST) || !is_scalar($_POST[$key])) continue;
+            self::set_metal_price($product, $metal, wc_clean(wp_unslash($_POST[$key])));
+            $changed = true;
+        }
+        if ($changed) $product->save();
+    }
+
+    /* ------------------------------------------------------------------
+     * Listings: "Από X €"
+     * ------------------------------------------------------------------ */
+    public static function from_price_html($html, $product) {
+        if (get_option(self::FROM_PRICE_OPTION, 'yes') !== 'yes') return $html;
+        if ((is_admin() && !wp_doing_ajax()) || !$product || !$product->is_type(['simple', 'variable'])) return $html;
+        // On the product's own page the configurator shows the selected metal's price;
+        // configurator.js needs the original Gold price there.
+        if (function_exists('is_product') && is_product() && $product->get_id() === get_queried_object_id()) return $html;
+        if (!self::matches($product->get_id())) return $html;
+        $table = self::price_table($product);
+        if (empty($table['gold'])) return $html;
+        $lowest = $table['gold'][0];
+        foreach ($table as $metal => $range) $lowest = min($lowest, $range[0]);
+        if ($lowest >= $table['gold'][0]) return $html;
+        return '<span class="jpc-from-price">Από ' . wc_price($lowest) . '</span>' . $product->get_price_suffix($lowest);
+    }
+
+    /** Metals that can be bought for this exact product (simple product or variation). */
     private static function allowed_metals($product) {
         $allowed = ['gold'];
-        if (self::platinum_price($product) !== '') $allowed[] = 'platinum';
-        if (self::silver_price($product) !== '') $allowed[] = 'silver';
+        foreach (array_keys(self::METAL_PRICE_KEYS) as $metal) {
+            if (self::metal_price($product, $metal) !== '') $allowed[] = $metal;
+        }
         return $allowed;
     }
     /** Discard stale cart lines for metal options no longer offered by the product. */
@@ -210,7 +392,8 @@ final class JPC_Product_Configurator {
             if (empty($cart_item['jc_config']['metal_type'])) continue;
             $metal = $cart_item['jc_config']['metal_type'];
             if ($metal === 'gold') continue;
-            $product_id = isset($cart_item['product_id']) ? absint($cart_item['product_id']) : 0;
+            $product_id = !empty($cart_item['variation_id']) ? absint($cart_item['variation_id'])
+                : (isset($cart_item['product_id']) ? absint($cart_item['product_id']) : 0);
             $product = $product_id && function_exists('wc_get_product') ? wc_get_product($product_id) : false;
             if (!$product || !in_array($metal, self::allowed_metals($product), true)) {
                 $cart->remove_cart_item($key);
@@ -226,7 +409,7 @@ final class JPC_Product_Configurator {
         foreach ($cart->get_cart() as $cart_item) {
             if (empty($cart_item['jc_config']) || !isset($cart_item['jc_config']['metal_type'])) continue;
             $product = isset($cart_item['data']) ? $cart_item['data'] : null;
-            if (!$product || !$product->is_type('simple')) continue;
+            if (!$product || !$product->is_type(['simple', 'variation'])) continue;
             $metal = $cart_item['jc_config']['metal_type'];
             // Gold is the product's own WooCommerce price (including any real sale): leave it alone.
             if ($metal === 'gold') continue;
@@ -277,6 +460,11 @@ final class JPC_Product_Configurator {
         register_setting('jpc_settings', self::OPTION, ['type'=>'array', 'sanitize_callback'=>[__CLASS__, 'sanitize_categories'], 'default'=>[38,40,42,43]]);
         register_setting('jpc_settings', self::FIELDS_OPTION, ['type'=>'array', 'sanitize_callback'=>[__CLASS__, 'sanitize_category_fields'], 'default'=>[]]);
         register_setting('jpc_settings', self::PLACEMENT_OPTION, ['type'=>'string', 'sanitize_callback'=>[__CLASS__, 'sanitize_placement'], 'default'=>'automatic']);
+        register_setting('jpc_settings', self::LABEL_PRICES_OPTION, ['type'=>'string', 'sanitize_callback'=>[__CLASS__, 'sanitize_yes_no'], 'default'=>'yes']);
+        register_setting('jpc_settings', self::FROM_PRICE_OPTION, ['type'=>'string', 'sanitize_callback'=>[__CLASS__, 'sanitize_yes_no'], 'default'=>'yes']);
+    }
+    public static function sanitize_yes_no($value) {
+        return $value === 'yes' ? 'yes' : 'no';
     }
     public static function sanitize_placement($value) {
         return $value === 'shortcode' ? 'shortcode' : 'automatic';
@@ -289,7 +477,7 @@ final class JPC_Product_Configurator {
     }
     /** Defaults preserve all previous field behavior until a category is edited. */
     public static function category_fields($product_id) {
-        $default = ['color' => true, 'size' => true];
+        $default = ['color' => true, 'size' => true, 'sizes' => self::size_lists([])];
         $stored = get_option(self::FIELDS_OPTION, []);
         if (!is_array($stored)) $stored = [];
         $product_id = wp_get_post_parent_id($product_id) ?: $product_id;
@@ -311,7 +499,40 @@ final class JPC_Product_Configurator {
         return [
             'color' => !empty($stored[$id]['color']),
             'size' => !empty($stored[$id]['size']),
+            'sizes' => self::size_lists($stored[$id]),
         ];
+    }
+    /** ['eu' => ['47', '47.5', ...], 'us' => [...]] for a category's stored settings (defaults when unset). */
+    public static function size_lists($fields) {
+        $lists = [];
+        foreach (self::DEFAULT_SIZES as $system => $default) {
+            $range = isset($fields[$system]) && is_array($fields[$system]) && count($fields[$system]) === 3
+                ? $fields[$system] : $default;
+            // Work in hundredths to avoid floating point drift (e.g. 5 → 13 step 0.25).
+            [$from, $to, $step] = array_map(static function ($n) { return (int) round((float) $n * 100); }, $range);
+            $values = [];
+            for ($n = $from; $step > 0 && $n <= $to && count($values) < 200; $n += $step) {
+                $values[] = rtrim(rtrim(number_format($n / 100, 2, '.', ''), '0'), '.');
+            }
+            $lists[$system] = $values;
+        }
+        return $lists;
+    }
+    /** Ring sizes are stored as "5.5" and shown the Greek way, "5,5". */
+    public static function size_label($value) {
+        return str_replace('.', ',', (string) $value);
+    }
+    /** Range [from, to, step] from the settings form, or null to use the default. */
+    private static function sanitize_size_range($input) {
+        if (!is_array($input)) return null;
+        $nums = [];
+        foreach (['from', 'to', 'step'] as $k) {
+            $v = isset($input[$k]) ? str_replace(',', '.', trim((string) $input[$k])) : '';
+            if ($v === '' || !is_numeric($v) || (float) $v <= 0) return null;
+            $nums[] = round((float) $v, 2);
+        }
+        if ($nums[0] > $nums[1] || ($nums[1] - $nums[0]) / $nums[2] > 200) return null;
+        return $nums;
     }
     public static function sanitize_category_fields($value) {
         $result = [];
@@ -320,6 +541,10 @@ final class JPC_Product_Configurator {
             $id = absint($id);
             if (!$id || !is_array($fields)) continue;
             $result[$id] = ['color' => !empty($fields['color']) ? 1 : 0, 'size' => !empty($fields['size']) ? 1 : 0];
+            foreach (array_keys(self::DEFAULT_SIZES) as $system) {
+                $range = self::sanitize_size_range($fields[$system] ?? null);
+                if ($range) $result[$id][$system] = $range;
+            }
         }
         return $result;
     }
@@ -332,7 +557,7 @@ final class JPC_Product_Configurator {
         $stored_fields = get_option(self::FIELDS_OPTION, []);
         if (!is_array($stored_fields)) $stored_fields = [];
         echo '<p>Επίλεξε ποιες κατηγορίες χρησιμοποιούν τον configurator και ποια πεδία εμφανίζονται σε κάθε μία. Η επιλογή μετάλλου εμφανίζεται πάντα.</p>';
-        echo '<table class="widefat striped" style="max-width:920px"><thead><tr><th>Κατηγορία</th><th>Ενεργός configurator</th><th>Χρώμα χρυσού</th><th>Μέγεθος δαχτυλιδιού</th></tr></thead><tbody>';
+        echo '<table class="widefat striped" style="max-width:1200px"><thead><tr><th>Κατηγορία</th><th>Ενεργός configurator</th><th>Χρώμα χρυσού</th><th>Μέγεθος δαχτυλιδιού</th><th>Νούμερα EU (από – έως, βήμα)</th><th>Νούμερα US (από – έως, βήμα)</th></tr></thead><tbody>';
         if (!is_wp_error($cats)) foreach ($cats as $cat) {
             $id = (int) $cat->term_id;
             $f = isset($stored_fields[$id]) && is_array($stored_fields[$id]) ? $stored_fields[$id] : ['color'=>1,'size'=>1];
@@ -343,12 +568,28 @@ final class JPC_Product_Configurator {
             foreach (['color','size'] as $key) {
                 echo '<td><input type="hidden" name="'.esc_attr(self::FIELDS_OPTION).'['.$id.']['.$key.']" value="0"><input type="checkbox" name="'.esc_attr(self::FIELDS_OPTION).'['.$id.']['.$key.']" value="1" '.checked(!empty($f[$key]),true,false).'></td>';
             }
+            foreach (self::DEFAULT_SIZES as $system => $default) {
+                $range = isset($f[$system]) && is_array($f[$system]) ? $f[$system] : ['', '', ''];
+                $base = esc_attr(self::FIELDS_OPTION).'['.$id.']['.$system.']';
+                echo '<td style="white-space:nowrap">';
+                foreach (['from', 'to', 'step'] as $i => $k) {
+                    if ($k === 'to') echo ' – ';
+                    if ($k === 'step') echo ' ανά ';
+                    echo '<input type="number" min="0" step="0.25" style="width:'.($k === 'step' ? '60' : '70').'px" name="'.$base.'['.$k.']" value="'.esc_attr($range[$i]).'" placeholder="'.esc_attr($default[$i]).'">';
+                }
+                echo '</td>';
+            }
             echo '</tr>';
         }
         echo '</tbody></table>';
         // Ensure unchecking every category saves an empty array.
         echo '<input type="hidden" name="'.esc_attr(self::OPTION).'[]" value="0">';
         echo '<p class="description">Αν ένα προϊόν ανήκει σε περισσότερες επιλεγμένες κατηγορίες, εφαρμόζεται η βαθύτερη κατηγορία (ή η μικρότερη ID αν έχουν ίδιο βάθος).</p>';
+        echo '<p class="description">Νούμερα: κενά πεδία = προεπιλογή (EU 47–58, US 5–13, ανά 1). Για μισά νούμερα βάλτε βήμα 0.5 (π.χ. US 5 – 13 ανά 0.5 → 5, 5½, 6 …).</p>';
+        echo '<h2>Εμφάνιση τιμών</h2><fieldset>';
+        echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::LABEL_PRICES_OPTION).'" value="yes" '.checked(get_option(self::LABEL_PRICES_OPTION, 'yes'), 'yes', false).'> Τιμή δίπλα σε κάθε μέταλλο στη σελίδα προϊόντος (π.χ. «Πλατίνα — 1.250 €»)</label>';
+        echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::FROM_PRICE_OPTION).'" value="yes" '.checked(get_option(self::FROM_PRICE_OPTION, 'yes'), 'yes', false).'> «Από X €» στις λίστες προϊόντων όταν κάποιο μέταλλο είναι φθηνότερο από τον χρυσό</label>';
+        echo '</fieldset>';
         echo '<h2>Θέση εμφάνισης</h2><fieldset>';
         echo '<label style="display:block;margin:8px 0"><input type="radio" name="'.esc_attr(self::PLACEMENT_OPTION).'" value="automatic" '.checked(self::placement(), 'automatic', false).'> Αυτόματα στη φόρμα προσθήκης στο καλάθι</label>';
         echo '<label style="display:block;margin:8px 0"><input type="radio" name="'.esc_attr(self::PLACEMENT_OPTION).'" value="shortcode" '.checked(self::placement(), 'shortcode', false).'> Στο σημείο που ορίζω με shortcode [jewelry_configurator] (YOOtheme Builder)</label>';
@@ -363,6 +604,7 @@ final class JPC_Product_Configurator {
         wp_enqueue_script('jpc-configurator', plugin_dir_url(__FILE__).'assets/js/configurator.js', ['jquery'], self::VERSION, true);
         $product = function_exists('wc_get_product') ? wc_get_product(get_queried_object_id()) : false;
         if ($product && $product->is_type('simple')) {
+            // Yellow Gold image swap is for simple products; variations have their own images.
             $product_image_id = $product->get_image_id();
             $primary_image = [];
             if ($product_image_id) {
@@ -381,35 +623,45 @@ final class JPC_Product_Configurator {
                     ];
                 }
             }
-            $platinum = self::platinum_price($product);
-            $silver = self::silver_price($product);
+            $images = [
+                'default' => $primary_image,
+                'yellowGold' => self::yellow_gold_image_data($product),
+            ];
+        }
+        if ($product && $product->is_type(['simple', 'variable'])) {
+            $table = self::price_table($product);
+            $metals = [];   // HTML for the main price element when no variation is selected
+            $labels = [];   // HTML next to each metal radio
+            foreach ($table as $metal => $range) {
+                $metals[$metal] = $product->is_type('simple') ? wc_price($range[0]) : self::range_html($range);
+                $labels[$metal] = self::range_html($range);
+            }
             wp_localize_script('jpc-configurator', 'JPCPrices', [
                 'enabled' => true,
-                'goldHtml' => wc_price(wc_get_price_to_display($product)),
-                'platinumHtml' => $platinum === '' ? '' : wc_price(wc_get_price_to_display($product, ['price' => (float)$platinum])),
-                'hasPlatinumPrice' => $platinum !== '',
-                'silverHtml' => $silver === '' ? '' : wc_price(wc_get_price_to_display($product, ['price' => (float)$silver])),
-                'hasSilverPrice' => $silver !== '',
+                'variable' => $product->is_type('variable'),
                 // Authoritative list for the browser: a metal missing here must not be offered.
-                'metals' => array_filter([
-                    'gold' => wc_price(wc_get_price_to_display($product)),
-                    'platinum' => $platinum === '' ? '' : wc_price(wc_get_price_to_display($product, ['price' => (float)$platinum])),
-                    'silver' => $silver === '' ? '' : wc_price(wc_get_price_to_display($product, ['price' => (float)$silver])),
-                ]),
+                'metals' => $metals,
+                'labels' => $labels,
+                'showLabelPrices' => get_option(self::LABEL_PRICES_OPTION, 'yes') === 'yes',
+                'unavailableText' => 'δεν διατίθεται',
+                // Kept for themes/snippets that read the 1.1.x keys.
+                'goldHtml' => $metals['gold'] ?? '',
+                'platinumHtml' => $metals['platinum'] ?? '',
+                'silverHtml' => $metals['silver'] ?? '',
+                'hasPlatinumPrice' => isset($metals['platinum']),
+                'hasSilverPrice' => isset($metals['silver']),
                 'priceSelector' => '.jpc-live-price',
                 'fields' => self::category_fields($product->get_id()),
-                'images' => [
-                    'default' => $primary_image,
-                    'yellowGold' => self::yellow_gold_image_data($product),
-                ],
+                'images' => $images ?? ['default' => [], 'yellowGold' => []],
             ]);
         }
     }
     public static function admin_assets($hook) {
         $screen = function_exists('get_current_screen') ? get_current_screen() : null;
-        if (!$screen || $screen->id !== 'product') return;
-        wp_enqueue_media();
-        wp_enqueue_script('jpc-admin-configurator', plugin_dir_url(__FILE__) . 'assets/js/admin-product.js', ['jquery'], self::VERSION, true);
+        if (!$screen || !in_array($screen->id, ['product', 'edit-product'], true)) return;
+        if ($screen->id === 'product') wp_enqueue_media();
+        $deps = $screen->id === 'edit-product' ? ['jquery', 'inline-edit-post'] : ['jquery'];
+        wp_enqueue_script('jpc-admin-configurator', plugin_dir_url(__FILE__) . 'assets/js/admin-product.js', $deps, self::VERSION, true);
     }
     public static function auto_fields() {
         global $product;
@@ -423,21 +675,24 @@ final class JPC_Product_Configurator {
         if (self::$rendered) return '';
         self::$rendered = true;
         $config_fields = self::category_fields(get_queried_object_id());
+        $jpc_product = wc_get_product(get_queried_object_id());
+        $table = $jpc_product ? self::price_table($jpc_product) : [];
+        $show_prices = get_option(self::LABEL_PRICES_OPTION, 'yes') === 'yes';
+        $sizes = [];
+        foreach ($config_fields['sizes'] as $system => $values) {
+            $sizes[$system] = array_map(static function ($v) { return ['v' => $v, 'l' => self::size_label($v)]; }, $values);
+        }
         ob_start(); ?>
-        <div class="jewelry-configurator" data-jc-configurator="1" data-jc-has-color="<?php echo $config_fields['color'] ? '1' : '0'; ?>" data-jc-has-size="<?php echo $config_fields['size'] ? '1' : '0'; ?>">
+        <div class="jewelry-configurator" data-jc-configurator="1" data-jc-has-color="<?php echo $config_fields['color'] ? '1' : '0'; ?>" data-jc-has-size="<?php echo $config_fields['size'] ? '1' : '0'; ?>" data-jc-sizes="<?php echo esc_attr(wp_json_encode($sizes)); ?>">
           <div class="jc-grid">
             <div id="jc_metal_box" class="jc-box jc-box-full uk-card uk-card-conf uk-card-small uk-card-body uk-border-rounded">
               <h4 class="jc-box-title">Επιλογή Μετάλλου</h4>
               <div class="jc-radio-group">
-                <label class="jc-radio-option"><input type="radio" name="jc_metal_type_ui" value="gold" checked><span>Χρυσός</span></label>
-                <?php
-                $jpc_product = wc_get_product(get_queried_object_id());
-                if ($jpc_product && self::platinum_price($jpc_product) !== '') : ?>
-                  <label class="jc-radio-option"><input type="radio" name="jc_metal_type_ui" value="platinum"><span>Πλατίνα</span></label>
-                <?php endif;
-                if ($jpc_product && self::silver_price($jpc_product) !== '') : ?>
-                  <label class="jc-radio-option"><input type="radio" name="jc_metal_type_ui" value="silver"><span>Ασήμι</span></label>
-                <?php endif; ?>
+                <?php foreach (self::METAL_LABELS as $metal => $label) :
+                  if ($metal !== 'gold' && !isset($table[$metal])) continue; ?>
+                  <label class="jc-radio-option"><input type="radio" name="jc_metal_type_ui" value="<?php echo esc_attr($metal); ?>"<?php checked($metal, 'gold'); ?>><span><?php echo esc_html($label); ?></span><?php
+                    if ($show_prices) : ?><span class="jc-metal-price"><?php echo isset($table[$metal]) ? wp_kses_post(self::range_html($table[$metal])) : ''; ?></span><?php endif; ?></label>
+                <?php endforeach; ?>
               </div>
             </div>
             <?php if ($config_fields['color']) : ?>
@@ -466,18 +721,17 @@ final class JPC_Product_Configurator {
         return ['metal_type'=>self::posted('jc_metal_type'), 'gold_color'=>self::posted('jc_gold_color'), 'size_system'=>self::posted('jc_size_system'), 'ring_size'=>self::posted('jc_ring_size')];
     }
     private static function valid($cfg, $product = null) {
-        $fields = $product ? self::category_fields($product->get_id()) : ['color'=>true,'size'=>true];
-        $sizes_eu = array_map('strval', range(47,58));
-        $sizes_us = array_map('strval', range(5,13));
+        $fields = $product ? self::category_fields($product->get_id()) : ['color'=>true,'size'=>true,'sizes'=>self::size_lists([])];
         if (!in_array($cfg['metal_type'], $product ? self::allowed_metals($product) : ['gold'], true)) return false;
         if ($fields['color'] && $cfg['metal_type']==='gold' && !in_array($cfg['gold_color'], ['λευκόχρυσο','κίτρινο χρυσό'], true)) return false;
         if (!$fields['size']) return true;
         if (!in_array($cfg['size_system'], ['eu','us'], true)) return false;
-        return in_array($cfg['ring_size'], $cfg['size_system']==='eu' ? $sizes_eu : $sizes_us, true);
+        $sizes = $product ? $fields['sizes'] : self::size_lists([]);
+        return in_array($cfg['ring_size'], $sizes[$cfg['size_system']], true);
     }
     public static function validate($passed, $product_id, $quantity=1, $variation_id=0, $variations=[], $cart_item_data=[]) {
         if (!$passed || !self::matches($product_id)) return $passed;
-        if (!self::valid(self::selection(), wc_get_product($product_id))) {
+        if (!self::valid(self::selection(), wc_get_product($variation_id ?: $product_id))) {
             if (function_exists('wc_add_notice')) wc_add_notice('Παρακαλώ συμπληρώστε τις υποχρεωτικές επιλογές του προϊόντος.', 'error');
             return false;
         }
@@ -486,7 +740,7 @@ final class JPC_Product_Configurator {
     public static function save_cart_item($cart_item_data, $product_id, $variation_id=0) {
         if (!self::matches($product_id)) return $cart_item_data;
         $cfg = self::selection();
-        if (!self::valid($cfg, wc_get_product($product_id))) return $cart_item_data;
+        if (!self::valid($cfg, wc_get_product($variation_id ?: $product_id))) return $cart_item_data;
         $enabled_fields = self::category_fields($product_id);
         if ($cfg['metal_type'] !== 'gold' || !$enabled_fields['color']) $cfg['gold_color']='';
         if (!$enabled_fields['size']) { $cfg['size_system']=''; $cfg['ring_size']=''; }
@@ -495,12 +749,11 @@ final class JPC_Product_Configurator {
         return $cart_item_data;
     }
     private static function labels($cfg) {
-        $metal_labels = ['gold' => 'Χρυσός', 'platinum' => 'Πλατίνα', 'silver' => 'Ασήμι'];
-        $rows = ['Επιλογή Μετάλλου' => $metal_labels[$cfg['metal_type']] ?? 'Χρυσός'];
+        $rows = ['Επιλογή Μετάλλου' => self::METAL_LABELS[$cfg['metal_type']] ?? 'Χρυσός'];
         if ($cfg['metal_type']==='gold' && !empty($cfg['gold_color'])) $rows['Χρώμα Μετάλλου']=$cfg['gold_color'];
         if (!empty($cfg['size_system']) && !empty($cfg['ring_size'])) {
             $rows['Τύπος Μεγέθους']=$cfg['size_system']==='eu' ? 'Ευρωπαϊκά':'Αμερικάνικα';
-            $rows['Νούμερο Δαχτυλιδιού']=$cfg['ring_size'];
+            $rows['Νούμερο Δαχτυλιδιού']=self::size_label($cfg['ring_size']);
         }
         return $rows;
     }

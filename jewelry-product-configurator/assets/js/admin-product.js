@@ -42,3 +42,22 @@ jQuery(function ($) {
     updatePreview($field, null);
   });
 });
+
+/* Products list → Quick Edit: Platinum / Silver prices (simple products only). */
+jQuery(function ($) {
+  if (!window.inlineEditPost || typeof window.inlineEditPost.edit !== 'function') return;
+  const originalEdit = window.inlineEditPost.edit;
+  window.inlineEditPost.edit = function (id) {
+    originalEdit.apply(this, arguments);
+    const postId = parseInt(typeof id === 'object' ? this.getId(id) : id, 10);
+    if (!postId) return;
+    const $data = $('#post-' + postId).find('.jpc-inline-data');
+    const $fields = $('#edit-' + postId).find('.jpc-quick-edit');
+    const type = $.trim($('#woocommerce_inline_' + postId).find('.product_type').text());
+    // Without the stored values we must not post blank fields (blank = "not available").
+    const enabled = type === 'simple' && $data.length > 0;
+    $fields.toggle(enabled).find('input').prop('disabled', !enabled);
+    $fields.find('input[name="_jpc_platinum_price"]').val(enabled ? ($data.attr('data-platinum') || '') : '');
+    $fields.find('input[name="_jpc_silver_price"]').val(enabled ? ($data.attr('data-silver') || '') : '');
+  };
+});
