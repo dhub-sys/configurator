@@ -1,0 +1,143 @@
+.jewelry-configurator .uk-card-conf {border:1px solid grey;}
+/* Scoped only to jewelry configurator */
+.jewelry-configurator[data-jc-configurator="1"] {
+  margin-bottom: 16px;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-box-full {
+  grid-column: 1 / -1;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-box-half {
+  grid-column: span 1;
+}
+
+@media (max-width: 959px) {
+  .jewelry-configurator[data-jc-configurator="1"] .jc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .jewelry-configurator[data-jc-configurator="1"] .jc-box-full,
+  .jewelry-configurator[data-jc-configurator="1"] .jc-box-half {
+    grid-column: 1 / -1;
+  }
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-box-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-control {
+  width: 100%;
+  max-width: 100%;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin: 0;
+}
+
+/* Swatches */
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-tile {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: block;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch:hover .jc-swatch-tile {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch input:checked + .jc-swatch-tile {
+  border: 3px solid #111;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-whitegold .jc-swatch-tile {
+  background: linear-gradient(
+    145deg,
+    #fafafa 0%,
+    #f1f1f1 22%,
+    #dddddd 48%,
+    #f6f6f6 68%,
+    #d2d2d2 100%
+  );
+}
+
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-yellowgold .jc-swatch-tile {
+  background: linear-gradient(
+    145deg,
+    #f9edb8 0%,
+    #efd98a 24%,
+    #d9bb58 50%,
+    #f3e1a0 72%,
+    #caa645 100%
+  );
+}
+
+/* Missing selection state */
+.jewelry-configurator[data-jc-configurator="1"] .jc-box.jc-invalid {
+  border: 2px solid #e10600 !important;
+}
+
+.jewelry-configurator[data-jc-configurator="1"] #jc_ring_size.jc-invalid-control {
+  border: 2px solid #e10600 !important;
+.jewelry-configurator [hidden] {display:none !important;}
+
+/* Ensure HTML hidden attribute wins over YOOtheme card display styles. */
+.jewelry-configurator[data-jc-configurator="1"] #jc_color_box[hidden] {
+  display: none !important;
+}
+
+/* Hide the YOOtheme filter navigation only for linked specification grids.
+   Keep filter controls in the DOM so UIkit can still activate them. */
+.jpc-metal-specs .el-nav,
+.jpc-metal-specs.el-item .el-nav {
+  display: none !important;
+}
