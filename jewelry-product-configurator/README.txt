@@ -82,3 +82,13 @@ Version 1.2.1:
   CSS printed in <head>, before the page is painted, whatever outputs them.
 - The plugin's configurator markup carries data-jc-source="plugin-<version>", so it can
   be told apart from markup produced by an old snippet or a theme template.
+
+Version 1.2.2:
+- Fix: category settings (e.g. "no ring size" for crosses) could be silently lost on save.
+  Each category row posts 11 inputs; with many categories this exceeded PHP's
+  max_input_vars (default 1000) and PHP dropped the rest. The table is now posted as a
+  single JSON field.
+- Fix: a product in several equally specific categories (e.g. Σταυροί + Μενταγιόν) used the
+  lowest category ID. Now a field is shown only if all of them enable it; the deepest
+  category still takes precedence over its parents.
+- Product edit screen (General tab) shows which category settings apply to the product.

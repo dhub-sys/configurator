@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και συστήματος/μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce.
- * Version: 1.2.1
+ * Version: 1.2.2
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.2.1';
+    const VERSION = '1.2.2';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -36,6 +36,7 @@ final class JPC_Product_Configurator {
         add_action('woocommerce_product_options_pricing', [__CLASS__, 'platinum_admin_field']);
         add_action('woocommerce_product_options_pricing', [__CLASS__, 'silver_admin_field']);
         add_action('woocommerce_product_options_general_product_data', [__CLASS__, 'yellow_gold_image_admin_field']);
+        add_action('woocommerce_product_options_general_product_data', [__CLASS__, 'category_fields_admin_hint'], 5);
         // Single save path for the metal prices, through WooCommerce CRUD only.
         add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_metal_prices'], 999);
         add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_yellow_gold_image_admin_field']);
@@ -473,11 +474,40 @@ final class JPC_Product_Configurator {
         return get_option(self::PLACEMENT_OPTION, 'automatic') === 'shortcode' ? 'shortcode' : 'automatic';
     }
     public static function sanitize_categories($value) {
+        $json = self::posted_settings_json();
+        if ($json !== null) $value = isset($json['categories']) && is_array($json['categories']) ? $json['categories'] : [];
         return array_values(array_unique(array_filter(array_map('absint', is_array($value) ? $value : []))));
+    }
+    /**
+     * The settings page posts the whole category table as ONE JSON field. A table with
+     * 11 inputs per category easily exceeds PHP's max_input_vars (default 1000), and PHP
+     * then silently drops the rest: later categories lost their settings.
+     */
+    private static function posted_settings_json() {
+        static $parsed = false, $data = null;
+        if ($parsed) return $data;
+        $parsed = true;
+        if (empty($_POST['jpc_settings_json']) || !is_string($_POST['jpc_settings_json'])) return null;
+        $decoded = json_decode(wp_unslash($_POST['jpc_settings_json']), true);
+        $data = is_array($decoded) ? $decoded : null;
+        return $data;
     }
     /** Defaults preserve all previous field behavior until a category is edited. */
     public static function category_fields($product_id) {
-        $default = ['color' => true, 'size' => true, 'sizes' => self::size_lists([])];
+        $resolved = self::resolve_category_fields($product_id);
+        unset($resolved['categories']);
+        return $resolved;
+    }
+    /**
+     * Which configurator fields a product gets, plus the category IDs that decided it.
+     * - Only categories with the configurator enabled count.
+     * - The most specific (deepest) of them decides.
+     * - If several are equally specific (e.g. "Σταυροί" and "Μενταγιόν"), a field is
+     *   shown only if ALL of them enable it: unchecking "Μέγεθος" on a category is never
+     *   overridden by a sibling category that happens to have a lower ID.
+     */
+    public static function resolve_category_fields($product_id) {
+        $default = ['color' => true, 'size' => true, 'sizes' => self::size_lists([]), 'categories' => []];
         $stored = get_option(self::FIELDS_OPTION, []);
         if (!is_array($stored)) $stored = [];
         $product_id = wp_get_post_parent_id($product_id) ?: $product_id;
@@ -487,20 +517,36 @@ final class JPC_Product_Configurator {
         $candidates = [];
         foreach ($terms as $term) {
             if (!in_array((int)$term->term_id, $enabled, true)) continue;
-            // Most specific selected category takes precedence if a product is in several.
-            $candidates[] = ['id' => (int)$term->term_id, 'depth' => count(get_ancestors($term->term_id, 'product_cat', 'taxonomy'))];
+            $candidates[(int)$term->term_id] = count(get_ancestors($term->term_id, 'product_cat', 'taxonomy'));
         }
         if (!$candidates) return $default;
-        usort($candidates, static function($a, $b) {
-            return ($b['depth'] <=> $a['depth']) ?: ($a['id'] <=> $b['id']);
-        });
-        $id = $candidates[0]['id'];
-        if (!array_key_exists($id, $stored) || !is_array($stored[$id])) return $default;
-        return [
-            'color' => !empty($stored[$id]['color']),
-            'size' => !empty($stored[$id]['size']),
-            'sizes' => self::size_lists($stored[$id]),
-        ];
+        $deepest = max($candidates);
+        $ids = array_keys(array_filter($candidates, static function ($depth) use ($deepest) { return $depth === $deepest; }));
+        sort($ids);
+        $result = ['color' => true, 'size' => true, 'sizes' => null, 'categories' => $ids];
+        foreach ($ids as $id) {
+            // A category never saved in the settings behaves as "everything enabled".
+            $fields = isset($stored[$id]) && is_array($stored[$id]) ? $stored[$id] : ['color' => 1, 'size' => 1];
+            $result['color'] = $result['color'] && !empty($fields['color']);
+            $result['size'] = $result['size'] && !empty($fields['size']);
+            if ($result['sizes'] === null && !empty($fields['size'])) $result['sizes'] = self::size_lists($fields);
+        }
+        if ($result['sizes'] === null) $result['sizes'] = self::size_lists([]);
+        return $result;
+    }
+    /** Product edit screen: show which category settings apply, so surprises are visible. */
+    public static function category_fields_admin_hint() {
+        global $product_object;
+        if (!$product_object || !$product_object->get_id()) return;
+        if (!self::matches($product_object->get_id())) {
+            echo '<p class="form-field"><span class="description" style="margin-left:162px;display:block">Jewelry Configurator: δεν εμφανίζεται σε αυτό το προϊόν (καμία ενεργή κατηγορία).</span></p>';
+            return;
+        }
+        $r = self::resolve_category_fields($product_object->get_id());
+        $names = array_map(static function ($id) { $t = get_term($id, 'product_cat'); return $t && !is_wp_error($t) ? $t->name : '#' . $id; }, $r['categories']);
+        echo '<p class="form-field"><span class="description" style="margin-left:162px;display:block">Jewelry Configurator: ρυθμίσεις από <strong>'
+            . esc_html(implode(', ', $names)) . '</strong> → Χρώμα χρυσού: <strong>' . ($r['color'] ? 'ναι' : 'όχι')
+            . '</strong>, Νούμερο δαχτυλιδιού: <strong>' . ($r['size'] ? 'ναι' : 'όχι') . '</strong>.</span></p>';
     }
     /** ['eu' => ['47', '47.5', ...], 'us' => [...]] for a category's stored settings (defaults when unset). */
     public static function size_lists($fields) {
@@ -535,6 +581,8 @@ final class JPC_Product_Configurator {
         return $nums;
     }
     public static function sanitize_category_fields($value) {
+        $json = self::posted_settings_json();
+        if ($json !== null) $value = isset($json['fields']) && is_array($json['fields']) ? $json['fields'] : [];
         $result = [];
         if (!is_array($value)) return $result;
         foreach ($value as $id => $fields) {
@@ -554,6 +602,8 @@ final class JPC_Product_Configurator {
         $cats = get_terms(['taxonomy'=>'product_cat', 'hide_empty'=>false]);
         echo '<div class="wrap"><h1>Jewelry Product Configurator</h1><p>Επίλεξε κατηγορίες και τρόπο εμφάνισης. Απενεργοποίησε τον παλιό PHP/JS κώδικα για να αποφύγεις διπλό configurator.</p><form action="options.php" method="post">';
         settings_fields('jpc_settings');
+        // Filled by the script below on submit; first in the form so it is never truncated.
+        echo '<input type="hidden" name="jpc_settings_json" id="jpc_settings_json" value="">';
         $stored_fields = get_option(self::FIELDS_OPTION, []);
         if (!is_array($stored_fields)) $stored_fields = [];
         echo '<p>Επίλεξε ποιες κατηγορίες χρησιμοποιούν τον configurator και ποια πεδία εμφανίζονται σε κάθε μία. Η επιλογή μετάλλου εμφανίζεται πάντα.</p>';
@@ -562,7 +612,7 @@ final class JPC_Product_Configurator {
             $id = (int) $cat->term_id;
             $f = isset($stored_fields[$id]) && is_array($stored_fields[$id]) ? $stored_fields[$id] : ['color'=>1,'size'=>1];
             $indent = str_repeat('— ', count(get_ancestors($id, 'product_cat', 'taxonomy')));
-            echo '<tr><td>'.esc_html($indent.$cat->name).' <small>(ID '.$id.')</small></td>';
+            echo '<tr class="jpc-cat-row" data-cat="'.$id.'"><td>'.esc_html($indent.$cat->name).' <small>(ID '.$id.')</small></td>';
             echo '<td><input type="checkbox" name="'.esc_attr(self::OPTION).'[]" value="'.$id.'" '.checked(in_array($id,$selected,true),true,false).'></td>';
             // Hidden defaults guarantee that unchecked fields are saved as false.
             foreach (['color','size'] as $key) {
@@ -584,7 +634,42 @@ final class JPC_Product_Configurator {
         echo '</tbody></table>';
         // Ensure unchecking every category saves an empty array.
         echo '<input type="hidden" name="'.esc_attr(self::OPTION).'[]" value="0">';
-        echo '<p class="description">Αν ένα προϊόν ανήκει σε περισσότερες επιλεγμένες κατηγορίες, εφαρμόζεται η βαθύτερη κατηγορία (ή η μικρότερη ID αν έχουν ίδιο βάθος).</p>';
+        echo '<p class="description">Αν ένα προϊόν ανήκει σε περισσότερες ενεργές κατηγορίες, εφαρμόζεται η βαθύτερη (πιο ειδική). Αν είναι στο ίδιο βάθος (π.χ. Σταυροί και Μενταγιόν), ένα πεδίο εμφανίζεται μόνο αν το έχουν ενεργό όλες. Στη σελίδα επεξεργασίας κάθε προϊόντος φαίνεται ποια ρύθμιση εφαρμόζεται.</p>';
+        // Serialize the table into one field and keep the per-row inputs out of the POST.
+        ?>
+        <script>
+        (function () {
+          var form = document.getElementById('jpc_settings_json').form;
+          form.addEventListener('submit', function () {
+            var data = {categories: [], fields: {}};
+            form.querySelectorAll('tr.jpc-cat-row').forEach(function (row) {
+              var id = row.getAttribute('data-cat');
+              var field = function (suffix, type) {
+                var name = '<?php echo esc_js(self::FIELDS_OPTION); ?>[' + id + ']' + suffix;
+                return Array.prototype.find.call(row.querySelectorAll('input'), function (el) {
+                  return el.name === name && (!type || el.type === type);
+                });
+              };
+              var checked = function (suffix) { var el = field(suffix, 'checkbox'); return el && el.checked ? 1 : 0; };
+              var enabled = Array.prototype.find.call(row.querySelectorAll('input'), function (el) { return el.name === '<?php echo esc_js(self::OPTION); ?>[]'; });
+              if (enabled && enabled.checked) data.categories.push(parseInt(id, 10));
+              var f = {color: checked('[color]'), size: checked('[size]')};
+              ['eu', 'us'].forEach(function (sys) {
+                f[sys] = {};
+                ['from', 'to', 'step'].forEach(function (k) { var el = field('[' + sys + '][' + k + ']'); f[sys][k] = el ? el.value : ''; });
+              });
+              data.fields[id] = f;
+              row.querySelectorAll('input').forEach(function (input) { input.disabled = true; });
+            });
+            document.getElementById('jpc_settings_json').value = JSON.stringify(data);
+          });
+          // Coming back with the browser's Back button must not leave the table disabled.
+          window.addEventListener('pageshow', function () {
+            form.querySelectorAll('tr.jpc-cat-row input').forEach(function (input) { input.disabled = false; });
+          });
+        })();
+        </script>
+        <?php
         echo '<p class="description">Νούμερα: κενά πεδία = προεπιλογή (EU 47–58, US 5–13, ανά 1). Για μισά νούμερα βάλτε βήμα 0.5 (π.χ. US 5 – 13 ανά 0.5 → 5, 5½, 6 …).</p>';
         echo '<h2>Εμφάνιση τιμών</h2><fieldset>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::LABEL_PRICES_OPTION).'" value="yes" '.checked(get_option(self::LABEL_PRICES_OPTION, 'yes'), 'yes', false).'> Τιμή δίπλα σε κάθε μέταλλο στη σελίδα προϊόντος (π.χ. «Πλατίνα — 1.250 €»)</label>';
