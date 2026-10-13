@@ -101,3 +101,12 @@ Version 1.2.3:
   foreign configurator markup, the separate ring configurator (ring-configurator.js /
   jw_* fields / JWRingCfg), old scripts still loaded, and size fields shown outside the
   plugin. Visitors never see it.
+
+Version 1.2.4:
+- Fix: choosing Χρυσός → Κίτρινο χρυσό replaced EVERY gallery image and thumbnail with the
+  Yellow Gold photo. Now only the main product photo (its large image and its own
+  thumbnail) is swapped; other gallery images (e.g. the model photo) stay as they are.
+  The main photo is recognised by file name in any size, including YOOtheme's cache copies;
+  if it cannot be recognised, the first slide and first thumbnail are used.
+- <picture> WebP sources are handled (they kept showing the old photo), thumbnail links
+  ("#") are left untouched, and the slideshow moves to the main photo when it changes.

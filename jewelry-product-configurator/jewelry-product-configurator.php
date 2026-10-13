@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και συστήματος/μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce.
- * Version: 1.2.3
+ * Version: 1.2.4
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.2.3';
+    const VERSION = '1.2.4';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -286,6 +286,15 @@ final class JPC_Product_Configurator {
         } else {
             $product->delete_meta_data('_jpc_yellow_gold_image_id');
         }
+    }
+    private static function image_stems($attachment_id) {
+        $stems = [];
+        foreach ([get_attached_file($attachment_id), wp_get_original_image_path($attachment_id)] as $path) {
+            if (!$path) continue;
+            $stem = strtolower(pathinfo($path, PATHINFO_FILENAME));
+            $stems[] = preg_replace('/-(scaled|rotated)$/', '', $stem);
+        }
+        return array_values(array_unique(array_filter($stems)));
     }
     private static function yellow_gold_image_data($product) {
         if (!$product || !$product->is_type('simple')) return [];
@@ -705,6 +714,8 @@ final class JPC_Product_Configurator {
                         'thumbSizes' => wp_get_attachment_image_sizes($product_image_id, 'woocommerce_thumbnail') ?: '',
                         'caption' => wp_get_attachment_caption($product_image_id) ?: '',
                         'alt' => get_post_meta($product_image_id, '_wp_attachment_image_alt', true) ?: '',
+                        // File name stems used to recognise this image in any size or cache copy.
+                        'stems' => self::image_stems($product_image_id),
                     ];
                 }
             }
