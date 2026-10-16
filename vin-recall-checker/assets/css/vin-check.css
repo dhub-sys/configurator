@@ -1,0 +1,75 @@
+/* Override these variables in your theme to match the dealership's colours. */
+.vrc-checker {
+    --vrc-accent: #1a1a1a;
+    --vrc-accent-text: #fff;
+    --vrc-border: #d0d4d9;
+    --vrc-radius: 6px;
+    --vrc-warn-bg: #fff4e5;
+    --vrc-warn-border: #f0a020;
+    --vrc-ok-bg: #edf7ed;
+    --vrc-ok-border: #3c9a3c;
+    --vrc-info-bg: #f1f3f5;
+    --vrc-info-border: #8a939c;
+    --vrc-error-bg: #fdecea;
+    --vrc-error-border: #d64545;
+    max-width: 640px;
+    margin: 0 auto 1.5em;
+    box-sizing: border-box;
+}
+.vrc-checker *, .vrc-checker *::before, .vrc-checker *::after { box-sizing: inherit; }
+.vrc-title { margin: 0 0 .4em; }
+.vrc-intro { margin: 0 0 1em; }
+.vrc-label { display: block; font-weight: 600; margin-bottom: .35em; }
+.vrc-row { display: flex; gap: .5em; flex-wrap: wrap; }
+.vrc-input {
+    flex: 1 1 260px;
+    min-width: 0;
+    padding: .7em .85em;
+    font-size: 1.05em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    border: 1px solid var(--vrc-border);
+    border-radius: var(--vrc-radius);
+}
+.vrc-input--complete { border-color: var(--vrc-ok-border); }
+.vrc-button {
+    flex: 0 0 auto;
+    padding: .7em 1.4em;
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--vrc-accent-text);
+    background: var(--vrc-accent);
+    border: 0;
+    border-radius: var(--vrc-radius);
+    cursor: pointer;
+}
+.vrc-button:disabled { opacity: .6; cursor: progress; }
+.vrc-counter { font-size: .85em; opacity: .7; margin-top: .3em; text-align: right; }
+.vrc-hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; opacity: 0; }
+
+.vrc-result {
+    margin-top: 1em;
+    padding: 1em 1.2em;
+    border-left: 4px solid var(--vrc-info-border);
+    border-radius: var(--vrc-radius);
+    background: var(--vrc-info-bg);
+}
+.vrc-result p { margin: 0 0 .5em; }
+.vrc-result p:last-child { margin-bottom: 0; }
+.vrc-result__message { font-weight: 600; font-size: 1.05em; }
+.vrc-result__vin { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; opacity: .8; }
+.vrc-result--campaigns { background: var(--vrc-warn-bg); border-color: var(--vrc-warn-border); }
+.vrc-result--clear { background: var(--vrc-ok-bg); border-color: var(--vrc-ok-border); }
+.vrc-result--error, .vrc-result--invalid { background: var(--vrc-error-bg); border-color: var(--vrc-error-border); }
+.vrc-result__actions { display: flex; gap: .75em; flex-wrap: wrap; align-items: center; margin-top: .75em; }
+.vrc-cta {
+    display: inline-block;
+    padding: .55em 1.1em;
+    color: var(--vrc-accent-text) !important;
+    background: var(--vrc-accent);
+    border-radius: var(--vrc-radius);
+    text-decoration: none !important;
+    font-weight: 600;
+}
+.vrc-phone { font-weight: 600; }
