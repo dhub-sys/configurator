@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.3.2
+ * Version: 1.3.3
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.3.2';
+    const VERSION = '1.3.3';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -837,8 +837,44 @@ final class JPC_Product_Configurator {
             self::$foreign_shortcode = self::describe_callback($current);
             // Remember it for the admin notice (snippets often run on the front end only).
             set_transient('jpc_foreign_shortcode', self::$foreign_shortcode, WEEK_IN_SECONDS);
+            $file = self::callback_file($current);
+            if ($file) set_transient('jpc_foreign_file', $file, WEEK_IN_SECONDS);
         }
         add_shortcode('jewelry_configurator', [__CLASS__, 'shortcode']);
+    }
+    private static function callback_reflection($callback) {
+        try {
+            if (is_string($callback) && strpos($callback, '::') !== false) $callback = explode('::', $callback, 2);
+            if (is_array($callback)) return new ReflectionMethod($callback[0], $callback[1]);
+            if (is_string($callback) || $callback instanceof Closure) return new ReflectionFunction($callback);
+        } catch (Throwable $e) { /* not inspectable */ }
+        return null;
+    }
+    private static function callback_file($callback) {
+        $ref = self::callback_reflection($callback);
+        $file = $ref ? (string) $ref->getFileName() : '';
+        return $file !== '' && strpos($file, "eval()'d code") === false ? $file : '';
+    }
+    /**
+     * Everything else the old code in $file hooks into (cart validation, cart data,
+     * scripts…): [['hook', 'function', line], ...]. Read-only; nothing is unhooked.
+     */
+    private static function hooks_from_file($file) {
+        global $wp_filter;
+        $found = [];
+        if (!$file || empty($wp_filter)) return $found;
+        foreach ($wp_filter as $hook => $holder) {
+            $callbacks = is_object($holder) && isset($holder->callbacks) ? $holder->callbacks : (is_array($holder) ? $holder : []);
+            foreach ($callbacks as $priority => $items) {
+                foreach ((array) $items as $item) {
+                    $ref = self::callback_reflection($item['function'] ?? null);
+                    if (!$ref || $ref->getFileName() !== $file) continue;
+                    $found[] = [$hook, $ref->getName(), (int) $ref->getStartLine()];
+                }
+            }
+        }
+        usort($found, static function ($a, $b) { return $a[2] <=> $b[2]; });
+        return $found;
     }
     private static function describe_callback($callback) {
         try {
@@ -863,14 +899,38 @@ final class JPC_Product_Configurator {
         $foreign = get_transient('jpc_foreign_shortcode');
         if (!$foreign) return;
         echo '<div class="notice notice-warning"><p><strong>Jewelry Configurator:</strong> το shortcode <code>[jewelry_configurator]</code> είχε καταχωρηθεί και από άλλον κώδικα, που ήταν αυτός που εκτελούνταν: <code>'
-            . esc_html($foreign) . '</code>. Το plugin το έχει πάρει πίσω, αλλά απενεργοποιήστε/σβήστε αυτόν τον παλιό κώδικα. Το μήνυμα σβήνει μόνο του μία εβδομάδα αφού πάψει να εντοπίζεται.</p></div>';
+            . esc_html($foreign) . '</code>. Το plugin το έχει πάρει πίσω, αλλά απενεργοποιήστε/σβήστε αυτόν τον παλιό κώδικα. Το μήνυμα σβήνει μόνο του μία εβδομάδα αφού πάψει να εντοπίζεται.</p>';
+        $file = get_transient('jpc_foreign_file');
+        $hooks = $file && is_readable($file) ? self::hooks_from_file($file) : [];
+        if ($hooks) {
+            $short = defined('ABSPATH') && strpos($file, ABSPATH) === 0 ? substr($file, strlen(ABSPATH)) : $file;
+            echo '<p>Ο ίδιος παλιός κώδικας (<code>' . esc_html($short) . '</code>) συνδέεται ακόμα και σε αυτά, που συγκρούονται με το plugin (π.χ. έλεγχος καλαθιού, δεδομένα παραγγελίας, scripts):</p><ul style="list-style:disc;margin-left:20px">';
+            foreach ($hooks as [$hook, $function, $line]) {
+                echo '<li><code>' . esc_html($function) . '</code> → <code>' . esc_html($hook) . '</code> (γραμμή ' . (int) $line . ')</li>';
+            }
+            echo '</ul>';
+        }
+        echo '</div>';
     }
     /** Shop managers only: note above the configurator when a foreign shortcode was overridden. */
+    /**
+     * Shop managers only: a note that appears after a few seconds unless the configurator's
+     * JavaScript starts and removes it, i.e. it shows when the script failed to run.
+     */
+    private static function js_check_banner() {
+        if (!current_user_can('manage_woocommerce')) return '';
+        return '<style>@keyframes jpcJsCheck{to{opacity:1;visibility:visible}}.jpc-js-check{opacity:0;visibility:hidden;animation:jpcJsCheck 0s 4s forwards}</style>'
+            . '<div class="jpc-debug jpc-js-check" style="border:2px dashed #e10600;background:#fff6f5;color:#600;padding:10px 12px;margin:0 0 16px;font-size:13px">'
+            . '<strong>Jewelry Configurator — μόνο για διαχειριστές:</strong> το JavaScript του configurator δεν εκτελέστηκε, γι’ αυτό δεν γεμίζουν τα νούμερα και δεν αλλάζει η τιμή. '
+            . 'Συνήθως φταίει σφάλμα σε άλλο script της σελίδας (π.χ. παλιός κώδικας του theme) ή plugin που συνενώνει/καθυστερεί JS (cache/optimization). '
+            . 'Πατήστε F12 → Console και δείτε το πρώτο κόκκινο σφάλμα.</div>';
+    }
     private static function foreign_shortcode_banner() {
-        if (self::$foreign_shortcode === '' || !current_user_can('manage_woocommerce')) return '';
+        $js = self::js_check_banner();
+        if (self::$foreign_shortcode === '' || !current_user_can('manage_woocommerce')) return $js;
         return '<div class="jpc-debug" style="border:2px dashed #e10600;background:#fff6f5;color:#600;padding:10px 12px;margin:0 0 16px;font-size:13px">'
             . '<strong>Jewelry Configurator — μόνο για διαχειριστές:</strong> το <code>[jewelry_configurator]</code> το είχε καταχωρήσει και άλλος κώδικας: <code>'
-            . esc_html(self::$foreign_shortcode) . '</code>. Το plugin το πήρε πίσω· σβήστε τον παλιό κώδικα.</div>';
+            . esc_html(self::$foreign_shortcode) . '</code>. Το plugin το πήρε πίσω· σβήστε τον παλιό κώδικα.</div>' . $js;
     }
     private static function render() {
         if (self::$rendered) return '';

@@ -3,6 +3,7 @@ jQuery(function ($) {
   'use strict';
   const $root = $('.jewelry-configurator[data-jc-configurator="1"]').first();
   if (!$root.length) return;
+  $('.jpc-js-check').remove(); // the script is running
 
   // The category settings sent by the server win over the markup's attributes, so
   // markup printed by something else (old snippet, theme template, page cache) still

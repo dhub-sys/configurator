@@ -144,3 +144,9 @@ Version 1.3.2: Wedding rings, per-ring choices
 - Each ticked ring gets its own box with its own size and its own engraving tick + text.
   Engraving fee applies per engraved ring.
 - Carts created with 1.3.0/1.3.1 (single engraving tick) keep working.
+
+Version 1.3.3 (diagnostics, shop managers only):
+- The "foreign shortcode" admin notice also lists every other hook the same old file still
+  uses (cart validation, cart data, scripts…), with function names and line numbers.
+- A note appears above the configurator after a few seconds if its JavaScript did not run
+  (sizes not filling, price not changing), pointing to the browser console.

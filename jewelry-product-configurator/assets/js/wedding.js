@@ -4,6 +4,7 @@ jQuery(function ($) {
   'use strict';
   const $root = $('.jpc-wedding[data-jc-wedding="1"]').first();
   if (!$root.length) return;
+  $('.jpc-js-check').remove(); // the script is running
   const data = window.JPCWedding || {};
   const common = window.JPCCommon;
   const prices = data.prices || {};
