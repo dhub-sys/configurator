@@ -127,3 +127,12 @@ Version 1.3.0: Wedding rings ("Βέρες")
   ανδρικής/γυναικείας, Χάραξη ανδρικής/γυναικείας). Listings show "Από X €" when a single
   ring is cheaper than the pair.
 - Shared front-end helpers moved to assets/js/jpc-common.js.
+
+Version 1.3.1:
+- Fix: an old snippet or theme registering the same [jewelry_configurator] shortcode later
+  replaced this plugin's one (WordPress keeps the last), so the page showed the old
+  configurator (e.g. the solitaire one on wedding rings). The plugin now takes the shortcode
+  back at the end of loading.
+- Admin notice + front-end note (shop managers only) naming the function, file and line of
+  the code that had registered it, so it can be removed.
+- New alias [jpc_configurator] that no old code can collide with.

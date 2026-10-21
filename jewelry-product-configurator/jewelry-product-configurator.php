@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.3.0
+ * Version: 1.3.1
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.3.0';
+    const VERSION = '1.3.1';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -62,6 +62,14 @@ final class JPC_Product_Configurator {
         add_action('admin_enqueue_scripts', [__CLASS__, 'admin_assets']);
         add_action('woocommerce_before_add_to_cart_button', [__CLASS__, 'auto_fields'], 5);
         add_shortcode('jewelry_configurator', [__CLASS__, 'shortcode']);
+        // Unique alias that no old snippet can have taken.
+        add_shortcode('jpc_configurator', [__CLASS__, 'shortcode']);
+        // An old snippet or theme registering [jewelry_configurator] later would replace
+        // this plugin's shortcode (WordPress keeps the last one). Take it back at the end
+        // of loading and remember who had it, for the diagnostics below.
+        add_action('init', [__CLASS__, 'claim_shortcode'], PHP_INT_MAX);
+        add_action('wp', [__CLASS__, 'claim_shortcode'], PHP_INT_MAX);
+        add_action('admin_notices', [__CLASS__, 'shortcode_conflict_notice']);
         add_filter('woocommerce_add_to_cart_validation', [__CLASS__, 'validate'], 10, 6);
         add_filter('woocommerce_add_cart_item_data', [__CLASS__, 'save_cart_item'], 10, 3);
         add_filter('woocommerce_get_item_data', [__CLASS__, 'display_cart_data'], 10, 2);
@@ -819,13 +827,59 @@ final class JPC_Product_Configurator {
     public static function shortcode() {
         return self::target_page() && self::placement() === 'shortcode' ? self::render() : '';
     }
+    /** Where the foreign [jewelry_configurator] handler came from, if one was found. */
+    private static $foreign_shortcode = '';
+    public static function claim_shortcode() {
+        global $shortcode_tags;
+        $current = $shortcode_tags['jewelry_configurator'] ?? null;
+        if ($current === [__CLASS__, 'shortcode']) return;
+        if ($current) {
+            self::$foreign_shortcode = self::describe_callback($current);
+            // Remember it for the admin notice (snippets often run on the front end only).
+            set_transient('jpc_foreign_shortcode', self::$foreign_shortcode, WEEK_IN_SECONDS);
+        }
+        add_shortcode('jewelry_configurator', [__CLASS__, 'shortcode']);
+    }
+    private static function describe_callback($callback) {
+        try {
+            if (is_string($callback) && strpos($callback, '::') !== false) $callback = explode('::', $callback, 2);
+            $ref = is_array($callback) ? new ReflectionMethod($callback[0], $callback[1])
+                : new ReflectionFunction($callback);
+            $file = (string) $ref->getFileName();
+            $name = is_array($callback) ? (is_object($callback[0]) ? get_class($callback[0]) : $callback[0]) . '::' . $callback[1]
+                : ($callback instanceof Closure ? 'function () { … }' : (string) $callback);
+            if (strpos($file, "eval()'d code") !== false) {
+                $file = 'κώδικας snippet (π.χ. plugin Code Snippets / WPCode)';
+            } elseif (defined('ABSPATH') && strpos($file, ABSPATH) === 0) {
+                $file = substr($file, strlen(ABSPATH));
+            }
+            return $name . ' — ' . $file . ($ref->getStartLine() ? ', γραμμή ' . $ref->getStartLine() : '');
+        } catch (Throwable $e) {
+            return 'άγνωστη προέλευση';
+        }
+    }
+    public static function shortcode_conflict_notice() {
+        if (!current_user_can('manage_woocommerce')) return;
+        $foreign = get_transient('jpc_foreign_shortcode');
+        if (!$foreign) return;
+        echo '<div class="notice notice-warning"><p><strong>Jewelry Configurator:</strong> το shortcode <code>[jewelry_configurator]</code> είχε καταχωρηθεί και από άλλον κώδικα, που ήταν αυτός που εκτελούνταν: <code>'
+            . esc_html($foreign) . '</code>. Το plugin το έχει πάρει πίσω, αλλά απενεργοποιήστε/σβήστε αυτόν τον παλιό κώδικα. Το μήνυμα σβήνει μόνο του μία εβδομάδα αφού πάψει να εντοπίζεται.</p></div>';
+    }
+    /** Shop managers only: note above the configurator when a foreign shortcode was overridden. */
+    private static function foreign_shortcode_banner() {
+        if (self::$foreign_shortcode === '' || !current_user_can('manage_woocommerce')) return '';
+        return '<div class="jpc-debug" style="border:2px dashed #e10600;background:#fff6f5;color:#600;padding:10px 12px;margin:0 0 16px;font-size:13px">'
+            . '<strong>Jewelry Configurator — μόνο για διαχειριστές:</strong> το <code>[jewelry_configurator]</code> το είχε καταχωρήσει και άλλος κώδικας: <code>'
+            . esc_html(self::$foreign_shortcode) . '</code>. Το plugin το πήρε πίσω· σβήστε τον παλιό κώδικα.</div>';
+    }
     private static function render() {
         if (self::$rendered) return '';
         self::$rendered = true;
         if (JPC_Wedding::is_wedding(get_queried_object_id())) {
             $wedding_product = wc_get_product(get_queried_object_id());
-            return $wedding_product && $wedding_product->is_type('simple') ? JPC_Wedding::render($wedding_product) : '';
+            return $wedding_product && $wedding_product->is_type('simple') ? self::foreign_shortcode_banner() . JPC_Wedding::render($wedding_product) : '';
         }
+        $banner = self::foreign_shortcode_banner();
         $config_fields = self::category_fields(get_queried_object_id());
         $jpc_product = wc_get_product(get_queried_object_id());
         $table = $jpc_product ? self::price_table($jpc_product) : [];
@@ -864,7 +918,7 @@ final class JPC_Product_Configurator {
         <input type="hidden" name="jc_gold_color" value="">
         <input type="hidden" name="jc_size_system" value="">
         <input type="hidden" name="jc_ring_size" value="">
-        <?php return ob_get_clean();
+        <?php return $banner . ob_get_clean();
     }
     private static function posted($key) {
         return isset($_POST[$key]) && is_scalar($_POST[$key]) ? sanitize_text_field(wp_unslash($_POST[$key])) : '';
