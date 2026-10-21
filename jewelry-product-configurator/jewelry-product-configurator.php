@@ -695,7 +695,8 @@ final class JPC_Product_Configurator {
     public static function assets() {
         if (!self::target_page()) return;
         wp_enqueue_style('jpc-configurator', plugin_dir_url(__FILE__).'assets/css/configurator.css', [], self::VERSION);
-        wp_enqueue_script('jpc-configurator', plugin_dir_url(__FILE__).'assets/js/configurator.js', ['jquery'], self::VERSION, true);
+        wp_enqueue_script('jpc-common', plugin_dir_url(__FILE__).'assets/js/jpc-common.js', ['jquery'], self::VERSION, true);
+        wp_enqueue_script('jpc-configurator', plugin_dir_url(__FILE__).'assets/js/configurator.js', ['jquery', 'jpc-common'], self::VERSION, true);
         $product = function_exists('wc_get_product') ? wc_get_product(get_queried_object_id()) : false;
         if ($product && $product->is_type('simple')) {
             // Yellow Gold image swap is for simple products; variations have their own images.
