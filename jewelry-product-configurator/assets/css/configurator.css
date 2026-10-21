@@ -1,53 +1,64 @@
-.jewelry-configurator .uk-card-conf {border:1px solid grey;}
+.jewelry-configurator .uk-card-conf, .jpc-wedding .uk-card-conf {border:1px solid grey;}
 /* Scoped only to jewelry configurator */
-.jewelry-configurator[data-jc-configurator="1"] {
+.jewelry-configurator[data-jc-configurator="1"],
+.jpc-wedding[data-jc-wedding="1"] {
   margin-bottom: 16px;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-grid {
+.jewelry-configurator[data-jc-configurator="1"] .jc-grid,
+.jpc-wedding[data-jc-wedding="1"] .jc-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-box-full {
+.jewelry-configurator[data-jc-configurator="1"] .jc-box-full,
+.jpc-wedding[data-jc-wedding="1"] .jc-box-full {
   grid-column: 1 / -1;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-box-half {
+.jewelry-configurator[data-jc-configurator="1"] .jc-box-half,
+.jpc-wedding[data-jc-wedding="1"] .jc-box-half {
   grid-column: span 1;
 }
 
 @media (max-width: 959px) {
-  .jewelry-configurator[data-jc-configurator="1"] .jc-grid {
+  .jewelry-configurator[data-jc-configurator="1"] .jc-grid,
+  .jpc-wedding[data-jc-wedding="1"] .jc-grid {
     grid-template-columns: 1fr;
   }
 
   .jewelry-configurator[data-jc-configurator="1"] .jc-box-full,
-  .jewelry-configurator[data-jc-configurator="1"] .jc-box-half {
+  .jpc-wedding[data-jc-wedding="1"] .jc-box-full,
+  .jewelry-configurator[data-jc-configurator="1"] .jc-box-half,
+  .jpc-wedding[data-jc-wedding="1"] .jc-box-half {
     grid-column: 1 / -1;
   }
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-box-title {
+.jewelry-configurator[data-jc-configurator="1"] .jc-box-title,
+.jpc-wedding[data-jc-wedding="1"] .jc-box-title {
   margin: 0 0 12px;
   font-size: 16px;
   font-weight: 600;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-control {
+.jewelry-configurator[data-jc-configurator="1"] .jc-control,
+.jpc-wedding[data-jc-wedding="1"] .jc-control {
   width: 100%;
   max-width: 100%;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-radio-group {
+.jewelry-configurator[data-jc-configurator="1"] .jc-radio-group,
+.jpc-wedding[data-jc-wedding="1"] .jc-radio-group {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   align-items: center;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-radio-option {
+.jewelry-configurator[data-jc-configurator="1"] .jc-radio-option,
+.jpc-wedding[data-jc-wedding="1"] .jc-radio-option {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -56,13 +67,15 @@
 }
 
 /* Swatches */
-.jewelry-configurator[data-jc-configurator="1"] .jc-swatches {
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatches,
+.jpc-wedding[data-jc-wedding="1"] .jc-swatches {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-swatch {
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch,
+.jpc-wedding[data-jc-wedding="1"] .jc-swatch {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -70,13 +83,15 @@
   cursor: pointer;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-swatch input {
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch input,
+.jpc-wedding[data-jc-wedding="1"] .jc-swatch input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-tile {
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-tile,
+.jpc-wedding[data-jc-wedding="1"] .jc-swatch-tile {
   width: 38px;
   height: 38px;
   border-radius: 10px;
@@ -89,17 +104,20 @@
     border-color 0.25s ease;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-swatch:hover .jc-swatch-tile {
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch:hover .jc-swatch-tile,
+.jpc-wedding[data-jc-wedding="1"] .jc-swatch:hover .jc-swatch-tile {
   transform: translateY(-6px);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-swatch input:checked + .jc-swatch-tile {
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch input:checked + .jc-swatch-tile,
+.jpc-wedding[data-jc-wedding="1"] .jc-swatch input:checked + .jc-swatch-tile {
   border: 3px solid #111;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-whitegold .jc-swatch-tile {
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-whitegold .jc-swatch-tile,
+.jpc-wedding[data-jc-wedding="1"] .jc-swatch-whitegold .jc-swatch-tile {
   background: linear-gradient(
     145deg,
     #fafafa 0%,
@@ -110,7 +128,8 @@
   );
 }
 
-.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-yellowgold .jc-swatch-tile {
+.jewelry-configurator[data-jc-configurator="1"] .jc-swatch-yellowgold .jc-swatch-tile,
+.jpc-wedding[data-jc-wedding="1"] .jc-swatch-yellowgold .jc-swatch-tile {
   background: linear-gradient(
     145deg,
     #f9edb8 0%,
@@ -122,18 +141,21 @@
 }
 
 /* Missing selection state */
-.jewelry-configurator[data-jc-configurator="1"] .jc-box.jc-invalid {
+.jewelry-configurator[data-jc-configurator="1"] .jc-box.jc-invalid,
+.jpc-wedding[data-jc-wedding="1"] .jc-box.jc-invalid {
   border: 2px solid #e10600 !important;
 }
 
-.jewelry-configurator[data-jc-configurator="1"] #jc_ring_size.jc-invalid-control {
+.jewelry-configurator[data-jc-configurator="1"] #jc_ring_size.jc-invalid-control,
+.jpc-wedding[data-jc-wedding="1"] #jc_ring_size.jc-invalid-control {
   border: 2px solid #e10600 !important;
 }
 
-.jewelry-configurator [hidden] {display:none !important;}
+.jewelry-configurator [hidden], .jpc-wedding [hidden] {display:none !important;}
 
 /* Ensure HTML hidden attribute wins over YOOtheme card display styles. */
-.jewelry-configurator[data-jc-configurator="1"] #jc_color_box[hidden] {
+.jewelry-configurator[data-jc-configurator="1"] #jc_color_box[hidden],
+.jpc-wedding[data-jc-wedding="1"] #jc_color_box[hidden] {
   display: none !important;
 }
 
@@ -145,20 +167,77 @@
 }
 
 /* Price next to each metal option */
-.jewelry-configurator[data-jc-configurator="1"] .jc-metal-price {
+.jewelry-configurator[data-jc-configurator="1"] .jc-metal-price,
+.jpc-wedding[data-jc-wedding="1"] .jc-metal-price {
   font-size: 0.9em;
   opacity: 0.75;
   white-space: nowrap;
 }
-.jewelry-configurator[data-jc-configurator="1"] .jc-metal-price:not(:empty)::before {
+.jewelry-configurator[data-jc-configurator="1"] .jc-metal-price:not(:empty)::before,
+.jpc-wedding[data-jc-wedding="1"] .jc-metal-price:not(:empty)::before {
   content: "— ";
 }
-.jewelry-configurator[data-jc-configurator="1"] .jc-metal-price del {
+.jewelry-configurator[data-jc-configurator="1"] .jc-metal-price del,
+.jpc-wedding[data-jc-wedding="1"] .jc-metal-price del {
   opacity: 0.6;
 }
 
 /* Metal not offered by the selected variation */
-.jewelry-configurator[data-jc-configurator="1"] .jc-radio-option.jc-unavailable {
+.jewelry-configurator[data-jc-configurator="1"] .jc-radio-option.jc-unavailable,
+.jpc-wedding[data-jc-wedding="1"] .jc-radio-option.jc-unavailable {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* ---- Wedding rings ---- */
+.jpc-wedding[data-jc-wedding="1"] .jcw-material {
+  margin: 12px 0 0;
+  font-size: 0.95em;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-swatch {
+  flex-direction: column;
+  gap: 6px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-swatch-name {
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+  max-width: 76px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-size,
+.jpc-wedding[data-jc-wedding="1"] .jcw-name {
+  display: block;
+  margin: 0 0 10px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-size > span,
+.jpc-wedding[data-jc-wedding="1"] .jcw-name > span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.9em;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-engrave-fields {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-engrave-fields .jcw-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-counter {
+  display: block;
+  text-align: right;
+  font-size: 0.8em;
+  opacity: 0.6;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-size .jc-invalid-control {
+  border: 2px solid #e10600 !important;
+}
+@media (max-width: 959px) {
+  .jpc-wedding[data-jc-wedding="1"] .jcw-engrave-fields {
+    grid-template-columns: 1fr;
+  }
 }

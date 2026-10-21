@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Jewelry Product Configurator
- * Description: Επιλογή μετάλλου, χρώματος και συστήματος/μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce.
- * Version: 1.2.4
+ * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
+ * Version: 1.3.0
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.2.4';
+    const VERSION = '1.3.0';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -298,7 +298,10 @@ final class JPC_Product_Configurator {
     }
     private static function yellow_gold_image_data($product) {
         if (!$product || !$product->is_type('simple')) return [];
-        $attachment_id = (int) $product->get_meta('_jpc_yellow_gold_image_id', true);
+        return self::attachment_image_data((int) $product->get_meta('_jpc_yellow_gold_image_id', true));
+    }
+    /** Image URLs for the front-end image swap; with $stems, also the file stems used to find it in the gallery. */
+    public static function attachment_image_data($attachment_id, $stems = false) {
         if (!$attachment_id) return [];
         $full = wp_get_attachment_image_src($attachment_id, 'full');
         if (!$full) return [];
@@ -312,7 +315,7 @@ final class JPC_Product_Configurator {
             'thumbSizes' => wp_get_attachment_image_sizes($attachment_id, 'woocommerce_thumbnail') ?: '',
             'caption' => wp_get_attachment_caption($attachment_id) ?: '',
             'alt' => get_post_meta($attachment_id, '_wp_attachment_image_alt', true) ?: '',
-        ];
+        ] + ($stems ? ['stems' => self::image_stems($attachment_id)] : []);
     }
     /* ------------------------------------------------------------------
      * Products list: column + Quick Edit
@@ -379,6 +382,11 @@ final class JPC_Product_Configurator {
         // configurator.js needs the original Gold price there.
         if (function_exists('is_product') && is_product() && $product->get_id() === get_queried_object_id()) return $html;
         if (!self::matches($product->get_id())) return $html;
+        if (JPC_Wedding::is_wedding($product->get_id())) {
+            $lowest = JPC_Wedding::lowest_display_price($product);
+            if ($lowest === null || $lowest >= (float) wc_get_price_to_display($product)) return $html;
+            return '<span class="jpc-from-price">Από ' . wc_price($lowest) . '</span>' . $product->get_price_suffix();
+        }
         $table = self::price_table($product);
         if (empty($table['gold'])) return $html;
         $lowest = $table['gold'][0];
@@ -399,6 +407,11 @@ final class JPC_Product_Configurator {
     public static function remove_unavailable_cart_metals($cart) {
         if (!$cart || !is_object($cart) || !method_exists($cart, 'get_cart')) return;
         foreach ($cart->get_cart() as $key => $cart_item) {
+            if (!empty($cart_item['jc_wedding']) && JPC_Wedding::cart_price($cart_item['product_id'], $cart_item['jc_wedding']) === null) {
+                $cart->remove_cart_item($key);
+                if (function_exists('wc_add_notice')) wc_add_notice('Αφαιρέθηκε από το καλάθι μια επιλογή βέρας που δεν είναι πλέον διαθέσιμη.', 'notice');
+                continue;
+            }
             if (empty($cart_item['jc_config']['metal_type'])) continue;
             $metal = $cart_item['jc_config']['metal_type'];
             if ($metal === 'gold') continue;
@@ -417,6 +430,17 @@ final class JPC_Product_Configurator {
     public static function apply_cart_prices($cart) {
         if ((is_admin() && !wp_doing_ajax()) || !$cart || !is_object($cart)) return;
         foreach ($cart->get_cart() as $cart_item) {
+            if (!empty($cart_item['jc_wedding']) && !empty($cart_item['data'])) {
+                $price = JPC_Wedding::cart_price($cart_item['product_id'], $cart_item['jc_wedding']);
+                if ($price === null) continue; // removed on cart load, blocked at checkout
+                $cart_item['data']->set_price($price);
+                if ($cart_item['jc_wedding']['option'] !== 'pair' || JPC_Wedding::engraved_count($cart_item['jc_wedding'])) {
+                    // A single ring / engraving is its own price, not a discount on the pair.
+                    $cart_item['data']->set_regular_price($price);
+                    $cart_item['data']->set_sale_price('');
+                }
+                continue;
+            }
             if (empty($cart_item['jc_config']) || !isset($cart_item['jc_config']['metal_type'])) continue;
             $product = isset($cart_item['data']) ? $cart_item['data'] : null;
             if (!$product || !$product->is_type(['simple', 'variation'])) continue;
@@ -439,6 +463,10 @@ final class JPC_Product_Configurator {
     public static function validate_cart_metals() {
         if (!function_exists('WC') || !WC()->cart) return;
         foreach (WC()->cart->get_cart() as $cart_item) {
+            if (!empty($cart_item['jc_wedding']) && JPC_Wedding::cart_price($cart_item['product_id'], $cart_item['jc_wedding']) === null) {
+                wc_add_notice(sprintf('Η επιλογή «%s» δεν διατίθεται πλέον. Αφαιρέστε το προϊόν από το καλάθι.', $cart_item['data']->get_name()), 'error');
+                continue;
+            }
             $metal = $cart_item['jc_config']['metal_type'] ?? 'gold';
             if ($metal === 'gold' || empty($cart_item['data'])) continue;
             if (self::metal_price($cart_item['data'], $metal) === '') {
@@ -516,7 +544,7 @@ final class JPC_Product_Configurator {
      *   overridden by a sibling category that happens to have a lower ID.
      */
     public static function resolve_category_fields($product_id) {
-        $default = ['color' => true, 'size' => true, 'sizes' => self::size_lists([]), 'categories' => []];
+        $default = ['color' => true, 'size' => true, 'sizes' => self::size_lists([]), 'categories' => [], 'mode' => 'standard'];
         $stored = get_option(self::FIELDS_OPTION, []);
         if (!is_array($stored)) $stored = [];
         $product_id = wp_get_post_parent_id($product_id) ?: $product_id;
@@ -532,15 +560,19 @@ final class JPC_Product_Configurator {
         $deepest = max($candidates);
         $ids = array_keys(array_filter($candidates, static function ($depth) use ($deepest) { return $depth === $deepest; }));
         sort($ids);
-        $result = ['color' => true, 'size' => true, 'sizes' => null, 'categories' => $ids];
+        $result = ['color' => true, 'size' => true, 'sizes' => null, 'categories' => $ids, 'mode' => JPC_Wedding::MODE];
         foreach ($ids as $id) {
             // A category never saved in the settings behaves as "everything enabled".
             $fields = isset($stored[$id]) && is_array($stored[$id]) ? $stored[$id] : ['color' => 1, 'size' => 1];
             $result['color'] = $result['color'] && !empty($fields['color']);
             $result['size'] = $result['size'] && !empty($fields['size']);
+            // Wedding mode only if every deciding category is a wedding-ring category.
+            if (($fields['mode'] ?? '') !== JPC_Wedding::MODE) $result['mode'] = 'standard';
             if ($result['sizes'] === null && !empty($fields['size'])) $result['sizes'] = self::size_lists($fields);
         }
-        if ($result['sizes'] === null) $result['sizes'] = self::size_lists([]);
+        // No deciding category asks for sizes (or a wedding category, which always does):
+        // use the first one's size range.
+        if ($result['sizes'] === null) $result['sizes'] = self::size_lists(isset($stored[$ids[0]]) && is_array($stored[$ids[0]]) ? $stored[$ids[0]] : []);
         return $result;
     }
     /** Product edit screen: show which category settings apply, so surprises are visible. */
@@ -552,6 +584,11 @@ final class JPC_Product_Configurator {
             return;
         }
         $r = self::resolve_category_fields($product_object->get_id());
+        if ($r['mode'] === JPC_Wedding::MODE) {
+            $names = array_map(static function ($id) { $t = get_term($id, 'product_cat'); return $t && !is_wp_error($t) ? $t->name : '#' . $id; }, $r['categories']);
+            echo '<p class="form-field"><span class="description" style="margin-left:162px;display:block">Jewelry Configurator: <strong>Βέρες</strong> (κατηγορία ' . esc_html(implode(', ', $names)) . '). Η κανονική τιμή είναι η τιμή του ζευγαριού· τιμές μεμονωμένων και χρώματα στην καρτέλα «Βέρες».</span></p>';
+            return;
+        }
         $names = array_map(static function ($id) { $t = get_term($id, 'product_cat'); return $t && !is_wp_error($t) ? $t->name : '#' . $id; }, $r['categories']);
         echo '<p class="form-field"><span class="description" style="margin-left:162px;display:block">Jewelry Configurator: ρυθμίσεις από <strong>'
             . esc_html(implode(', ', $names)) . '</strong> → Χρώμα χρυσού: <strong>' . ($r['color'] ? 'ναι' : 'όχι')
@@ -598,6 +635,7 @@ final class JPC_Product_Configurator {
             $id = absint($id);
             if (!$id || !is_array($fields)) continue;
             $result[$id] = ['color' => !empty($fields['color']) ? 1 : 0, 'size' => !empty($fields['size']) ? 1 : 0];
+            if (($fields['mode'] ?? '') === JPC_Wedding::MODE) $result[$id]['mode'] = JPC_Wedding::MODE;
             foreach (array_keys(self::DEFAULT_SIZES) as $system) {
                 $range = self::sanitize_size_range($fields[$system] ?? null);
                 if ($range) $result[$id][$system] = $range;
@@ -616,13 +654,15 @@ final class JPC_Product_Configurator {
         $stored_fields = get_option(self::FIELDS_OPTION, []);
         if (!is_array($stored_fields)) $stored_fields = [];
         echo '<p>Επίλεξε ποιες κατηγορίες χρησιμοποιούν τον configurator και ποια πεδία εμφανίζονται σε κάθε μία. Η επιλογή μετάλλου εμφανίζεται πάντα.</p>';
-        echo '<table class="widefat striped" style="max-width:1200px"><thead><tr><th>Κατηγορία</th><th>Ενεργός configurator</th><th>Χρώμα χρυσού</th><th>Μέγεθος δαχτυλιδιού</th><th>Νούμερα EU (από – έως, βήμα)</th><th>Νούμερα US (από – έως, βήμα)</th></tr></thead><tbody>';
+        echo '<table class="widefat striped" style="max-width:1200px"><thead><tr><th>Κατηγορία</th><th>Ενεργός configurator</th><th>Τύπος</th><th>Χρώμα χρυσού</th><th>Μέγεθος δαχτυλιδιού</th><th>Νούμερα EU (από – έως, βήμα)</th><th>Νούμερα US (από – έως, βήμα)</th></tr></thead><tbody>';
         if (!is_wp_error($cats)) foreach ($cats as $cat) {
             $id = (int) $cat->term_id;
             $f = isset($stored_fields[$id]) && is_array($stored_fields[$id]) ? $stored_fields[$id] : ['color'=>1,'size'=>1];
             $indent = str_repeat('— ', count(get_ancestors($id, 'product_cat', 'taxonomy')));
             echo '<tr class="jpc-cat-row" data-cat="'.$id.'"><td>'.esc_html($indent.$cat->name).' <small>(ID '.$id.')</small></td>';
             echo '<td><input type="checkbox" name="'.esc_attr(self::OPTION).'[]" value="'.$id.'" '.checked(in_array($id,$selected,true),true,false).'></td>';
+            $mode = ($f['mode'] ?? '') === JPC_Wedding::MODE ? JPC_Wedding::MODE : 'standard';
+            echo '<td><select name="'.esc_attr(self::FIELDS_OPTION).'['.$id.'][mode]"><option value="standard"'.selected($mode, 'standard', false).'>Κανονικό</option><option value="wedding"'.selected($mode, 'wedding', false).'>Βέρες</option></select></td>';
             // Hidden defaults guarantee that unchecked fields are saved as false.
             foreach (['color','size'] as $key) {
                 echo '<td><input type="hidden" name="'.esc_attr(self::FIELDS_OPTION).'['.$id.']['.$key.']" value="0"><input type="checkbox" name="'.esc_attr(self::FIELDS_OPTION).'['.$id.']['.$key.']" value="1" '.checked(!empty($f[$key]),true,false).'></td>';
@@ -662,24 +702,27 @@ final class JPC_Product_Configurator {
               var checked = function (suffix) { var el = field(suffix, 'checkbox'); return el && el.checked ? 1 : 0; };
               var enabled = Array.prototype.find.call(row.querySelectorAll('input'), function (el) { return el.name === '<?php echo esc_js(self::OPTION); ?>[]'; });
               if (enabled && enabled.checked) data.categories.push(parseInt(id, 10));
-              var f = {color: checked('[color]'), size: checked('[size]')};
+              var modeSelect = row.querySelector('select[name="<?php echo esc_js(self::FIELDS_OPTION); ?>[' + id + '][mode]"]');
+              var f = {color: checked('[color]'), size: checked('[size]'), mode: modeSelect ? modeSelect.value : 'standard'};
               ['eu', 'us'].forEach(function (sys) {
                 f[sys] = {};
                 ['from', 'to', 'step'].forEach(function (k) { var el = field('[' + sys + '][' + k + ']'); f[sys][k] = el ? el.value : ''; });
               });
               data.fields[id] = f;
-              row.querySelectorAll('input').forEach(function (input) { input.disabled = true; });
+              row.querySelectorAll('input, select').forEach(function (input) { input.disabled = true; });
             });
             document.getElementById('jpc_settings_json').value = JSON.stringify(data);
           });
           // Coming back with the browser's Back button must not leave the table disabled.
           window.addEventListener('pageshow', function () {
-            form.querySelectorAll('tr.jpc-cat-row input').forEach(function (input) { input.disabled = false; });
+            form.querySelectorAll('tr.jpc-cat-row input, tr.jpc-cat-row select').forEach(function (input) { input.disabled = false; });
           });
         })();
         </script>
         <?php
         echo '<p class="description">Νούμερα: κενά πεδία = προεπιλογή (EU 47–58, US 5–13, ανά 1). Για μισά νούμερα βάλτε βήμα 0.5 (π.χ. US 5 – 13 ανά 0.5 → 5, 5½, 6 …).</p>';
+        echo '<p class="description"><strong>Τύπος «Βέρες»:</strong> αντί για επιλογή μετάλλου, ο πελάτης διαλέγει ζευγάρι ή μεμονωμένη βέρα, χρώμα, νούμερα και χάραξη. Η στήλη «Χρώμα χρυσού» δεν ισχύει εκεί· τα νούμερα ακολουθούν τις στήλες EU/US.</p>';
+        JPC_Wedding::settings_section();
         echo '<h2>Εμφάνιση τιμών</h2><fieldset>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::LABEL_PRICES_OPTION).'" value="yes" '.checked(get_option(self::LABEL_PRICES_OPTION, 'yes'), 'yes', false).'> Τιμή δίπλα σε κάθε μέταλλο στη σελίδα προϊόντος (π.χ. «Πλατίνα — 1.250 €»)</label>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::FROM_PRICE_OPTION).'" value="yes" '.checked(get_option(self::FROM_PRICE_OPTION, 'yes'), 'yes', false).'> «Από X €» στις λίστες προϊόντων όταν κάποιο μέταλλο είναι φθηνότερο από τον χρυσό</label>';
@@ -696,30 +739,18 @@ final class JPC_Product_Configurator {
         if (!self::target_page()) return;
         wp_enqueue_style('jpc-configurator', plugin_dir_url(__FILE__).'assets/css/configurator.css', [], self::VERSION);
         wp_enqueue_script('jpc-common', plugin_dir_url(__FILE__).'assets/js/jpc-common.js', ['jquery'], self::VERSION, true);
+        if (JPC_Wedding::is_wedding(get_queried_object_id())) {
+            $product = wc_get_product(get_queried_object_id());
+            if (!$product || !$product->is_type('simple')) return;
+            wp_enqueue_script('jpc-wedding', plugin_dir_url(__FILE__).'assets/js/wedding.js', ['jquery', 'jpc-common'], self::VERSION, true);
+            wp_localize_script('jpc-wedding', 'JPCWedding', JPC_Wedding::script_data($product));
+            return;
+        }
         wp_enqueue_script('jpc-configurator', plugin_dir_url(__FILE__).'assets/js/configurator.js', ['jquery', 'jpc-common'], self::VERSION, true);
         $product = function_exists('wc_get_product') ? wc_get_product(get_queried_object_id()) : false;
         if ($product && $product->is_type('simple')) {
             // Yellow Gold image swap is for simple products; variations have their own images.
-            $product_image_id = $product->get_image_id();
-            $primary_image = [];
-            if ($product_image_id) {
-                $full = wp_get_attachment_image_src($product_image_id, 'full');
-                if ($full) {
-                    $primary_image = [
-                        'id' => $product_image_id,
-                        'src' => $full[0],
-                        'srcset' => wp_get_attachment_image_srcset($product_image_id, 'full') ?: '',
-                        'sizes' => wp_get_attachment_image_sizes($product_image_id, 'full') ?: '',
-                        'thumb' => wp_get_attachment_image_url($product_image_id, 'woocommerce_thumbnail') ?: $full[0],
-                        'thumbSrcset' => wp_get_attachment_image_srcset($product_image_id, 'woocommerce_thumbnail') ?: '',
-                        'thumbSizes' => wp_get_attachment_image_sizes($product_image_id, 'woocommerce_thumbnail') ?: '',
-                        'caption' => wp_get_attachment_caption($product_image_id) ?: '',
-                        'alt' => get_post_meta($product_image_id, '_wp_attachment_image_alt', true) ?: '',
-                        // File name stems used to recognise this image in any size or cache copy.
-                        'stems' => self::image_stems($product_image_id),
-                    ];
-                }
-            }
+            $primary_image = self::attachment_image_data((int) $product->get_image_id(), true);
             $images = [
                 'default' => $primary_image,
                 'yellowGold' => self::yellow_gold_image_data($product),
@@ -791,6 +822,10 @@ final class JPC_Product_Configurator {
     private static function render() {
         if (self::$rendered) return '';
         self::$rendered = true;
+        if (JPC_Wedding::is_wedding(get_queried_object_id())) {
+            $wedding_product = wc_get_product(get_queried_object_id());
+            return $wedding_product && $wedding_product->is_type('simple') ? JPC_Wedding::render($wedding_product) : '';
+        }
         $config_fields = self::category_fields(get_queried_object_id());
         $jpc_product = wc_get_product(get_queried_object_id());
         $table = $jpc_product ? self::price_table($jpc_product) : [];
@@ -848,6 +883,14 @@ final class JPC_Product_Configurator {
     }
     public static function validate($passed, $product_id, $quantity=1, $variation_id=0, $variations=[], $cart_item_data=[]) {
         if (!$passed || !self::matches($product_id)) return $passed;
+        if (JPC_Wedding::is_wedding($product_id)) {
+            $error = JPC_Wedding::error(JPC_Wedding::selection(), wc_get_product($product_id));
+            if ($error !== '') {
+                if (function_exists('wc_add_notice')) wc_add_notice($error, 'error');
+                return false;
+            }
+            return $passed;
+        }
         if (!self::valid(self::selection(), wc_get_product($variation_id ?: $product_id))) {
             if (function_exists('wc_add_notice')) wc_add_notice('Παρακαλώ συμπληρώστε τις υποχρεωτικές επιλογές του προϊόντος.', 'error');
             return false;
@@ -856,6 +899,11 @@ final class JPC_Product_Configurator {
     }
     public static function save_cart_item($cart_item_data, $product_id, $variation_id=0) {
         if (!self::matches($product_id)) return $cart_item_data;
+        if (JPC_Wedding::is_wedding($product_id)) {
+            $cfg = JPC_Wedding::selection();
+            if (JPC_Wedding::error($cfg, wc_get_product($product_id)) === '') $cart_item_data['jc_wedding'] = JPC_Wedding::normalize($cfg);
+            return $cart_item_data;
+        }
         $cfg = self::selection();
         if (!self::valid($cfg, wc_get_product($variation_id ?: $product_id))) return $cart_item_data;
         $enabled_fields = self::category_fields($product_id);
@@ -875,6 +923,10 @@ final class JPC_Product_Configurator {
         return $rows;
     }
     public static function display_cart_data($item_data,$cart_item) {
+        if (!empty($cart_item['jc_wedding'])) {
+            foreach (JPC_Wedding::labels($cart_item['jc_wedding']) as $name => $value) $item_data[] = ['name' => $name, 'value' => $value];
+            return $item_data;
+        }
         if (empty($cart_item['jc_config'])) return $item_data;
         // Prevent duplicate rows when an old snippet or another compatible integration
         // already added the same configurator labels to WooCommerce item data.
@@ -919,8 +971,14 @@ final class JPC_Product_Configurator {
         return $output;
     }
     public static function save_order_item($item, $cart_item_key, $values, $order) {
+        if (!empty($values['jc_wedding'])) {
+            foreach (JPC_Wedding::labels($values['jc_wedding']) as $name => $value) $item->add_meta_data($name, $value, true);
+            return;
+        }
         if (empty($values['jc_config'])) return;
         foreach (self::labels($values['jc_config']) as $name=>$value) $item->add_meta_data($name,$value,true);
     }
 }
+require_once __DIR__ . '/includes/class-jpc-wedding.php';
 add_action('plugins_loaded', ['JPC_Product_Configurator','init']);
+add_action('plugins_loaded', ['JPC_Wedding','init']);

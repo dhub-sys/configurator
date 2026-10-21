@@ -110,3 +110,20 @@ Version 1.2.4:
   if it cannot be recognised, the first slide and first thumbnail are used.
 - <picture> WebP sources are handled (they kept showing the old photo), thumbnail links
   ("#") are left untouched, and the slideshow moves to the main photo when it changes.
+
+Version 1.3.0: Wedding rings ("Βέρες")
+- WooCommerce > Jewelry Configurator: each category has a "Τύπος": Κανονικό (metal
+  configurator) or Βέρες. The category must also be ticked as "Ενεργός configurator".
+  Ring sizes follow the category's EU/US columns.
+- Settings > Βέρες: material text (default "Χρυσός 14K"), engraving max characters and
+  optional engraving fee per ring, and the shop-wide colour list (name, swatch colour,
+  optional 2nd colour for two-tone designs such as Ροζ - Λευκό).
+- Product > "Βέρες" tab (simple products): the normal WooCommerce price is the PAIR price;
+  optional men's / women's single ring prices (empty = not sold alone); tick the colours
+  the design comes in, with an optional photo per colour (replaces the main photo only).
+- Customer: Ζευγάρι / Ανδρική / Γυναικεία, colour, size system, one size per ring, and
+  optional name engraving per ring (for a pair, one or both). Live price incl. engraving.
+- Server-side validation, cart pricing, cart/order meta (Επιλογή, Υλικό, Χρώμα, Νούμερο
+  ανδρικής/γυναικείας, Χάραξη ανδρικής/γυναικείας). Listings show "Από X €" when a single
+  ring is cheaper than the pair.
+- Shared front-end helpers moved to assets/js/jpc-common.js.
