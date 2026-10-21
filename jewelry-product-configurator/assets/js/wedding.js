@@ -1,4 +1,5 @@
-/* Jewelry Product Configurator - wedding rings (pair / single ring, colour, sizes, engraving). */
+/* Jewelry Product Configurator - wedding rings: men's and/or women's ring, colour,
+ * a size and optional engraving per ring. Both rings ticked = the pair price. */
 jQuery(function ($) {
   'use strict';
   const $root = $('.jpc-wedding[data-jc-wedding="1"]').first();
@@ -8,6 +9,7 @@ jQuery(function ($) {
   const prices = data.prices || {};
   const fee = Number(data.engraveFee) || 0;
   const max = Number(data.engraveMax) || 20;
+  const RINGS = ['men', 'women'];
   const sizes = (function () {
     try {
       const parsed = JSON.parse($root.attr('data-jc-sizes') || '');
@@ -15,17 +17,25 @@ jQuery(function ($) {
     } catch (e) { /* fall through */ }
     return {eu: [], us: []};
   })();
-  const fieldNames = ['jcw_option', 'jcw_color', 'jcw_size_system', 'jcw_size_men', 'jcw_size_women', 'jcw_engrave', 'jcw_name_men', 'jcw_name_women'];
+  const fieldNames = ['jcw_option', 'jcw_color', 'jcw_size_system', 'jcw_size_men', 'jcw_size_women',
+    'jcw_engrave_men', 'jcw_engrave_women', 'jcw_name_men', 'jcw_name_women'];
 
   const checkedVal = name => $root.find('input[name="' + name + '"]:checked').val() || '';
-  const option = () => checkedVal('jcw_option_ui');
-  const rings = () => (option() === 'pair' ? ['men', 'women'] : (option() ? [option()] : []));
-  const engraving = () => $root.find('#jcw_engrave').is(':checked');
+  /** Ticked rings, always in the order men, women. */
+  const rings = () => RINGS.filter(ring => $root.find('input[name="jcw_ring_ui"][value="' + ring + '"]').is(':checked'));
+  const option = () => { const r = rings(); return r.length === 2 ? 'pair' : (r[0] || ''); };
+  const engraves = ring => $root.find('#jcw_engrave_' + ring).is(':checked');
   const nameOf = ring => String($root.find('#jcw_name_' + ring).val() || '').trim();
   const sizeOf = ring => String($root.find('#jcw_size_' + ring).val() || '');
+  const engravedCount = () => rings().filter(ring => engraves(ring) && nameOf(ring) !== '').length;
 
-  function engravedCount() {
-    return engraving() ? rings().filter(ring => nameOf(ring) !== '').length : 0;
+  /** Why the ticked combination cannot be bought, or ''. */
+  function optionProblem() {
+    const opt = option();
+    if (!opt) return 'Επιλέξτε ανδρική, γυναικεία ή και τις δύο βέρες.';
+    if (prices[opt] !== undefined) return '';
+    if (opt === 'pair') return 'Το ζευγάρι δεν διατίθεται.';
+    return 'Η ' + (opt === 'men' ? 'ανδρική' : 'γυναικεία') + ' βέρα πωλείται μόνο σε ζευγάρι. Τσεκάρετε και την ' + (opt === 'men' ? 'γυναικεία' : 'ανδρική') + '.';
   }
 
   /* ---- Price -------------------------------------------------------- */
@@ -43,7 +53,7 @@ jQuery(function ($) {
   }
   function updatePrice() {
     const opt = option();
-    if (!opt || prices[opt] === undefined) return;
+    if (prices[opt] === undefined) return; // keep the last valid price; the message explains
     const extra = fee * engravedCount();
     // The page's own price IS the pair price: restore it untouched (keeps a real sale display).
     const html = opt === 'pair' && extra === 0 ? null : priceHtml(prices[opt] + extra);
@@ -69,7 +79,7 @@ jQuery(function ($) {
   /* ---- Sizes / visibility ------------------------------------------- */
   function populateSizes() {
     const list = sizes[checkedVal('jcw_system_ui')] || [];
-    ['men', 'women'].forEach(function (ring) {
+    RINGS.forEach(function (ring) {
       const $select = $root.find('#jcw_size_' + ring);
       const previous = String($select.val() || '');
       $select.empty().append($('<option>', {value: '', text: 'Επιλέξτε νούμερο…'}));
@@ -79,34 +89,33 @@ jQuery(function ($) {
   }
   function updateVisibility() {
     const active = rings();
-    $root.find('.jcw-size, .jcw-name').each(function () {
-      $(this).prop('hidden', active.indexOf(this.getAttribute('data-ring')) === -1);
+    RINGS.forEach(function (ring) {
+      const $box = $root.find('#jcw_ring_' + ring);
+      const on = active.indexOf(ring) !== -1;
+      $box.prop('hidden', !on);
+      $box.find('.jcw-name').prop('hidden', !engraves(ring));
     });
-    $root.find('#jcw_size_box .jc-box-title').text(active.length > 1 ? 'Νούμερα' : 'Νούμερο');
-    $root.find('.jcw-engrave-fields').prop('hidden', !engraving());
-    $root.find('.jcw-hint').prop('hidden', active.length < 2);
+    // One ring: its box takes the full width.
+    $root.find('.jcw-ring').toggleClass('jc-box-full', active.length === 1).toggleClass('jc-box-half', active.length !== 1);
+    const problem = optionProblem();
+    $root.find('.jcw-option-msg').text(active.length ? problem : '').prop('hidden', !active.length || !problem);
   }
   function updateCounters() {
-    $root.find('.jcw-name').each(function () {
-      const length = String($(this).find('input').val() || '').length;
-      $(this).find('.jcw-counter').text(length + '/' + max);
-    });
+    RINGS.forEach(ring => $root.find('#jcw_ring_' + ring + ' .jcw-counter').text(String($root.find('#jcw_name_' + ring).val() || '').length + '/' + max));
   }
 
   /* ---- Hidden fields for the cart form ------------------------------ */
   function values() {
     const active = rings();
-    const engrave = engraving() && engravedCount() > 0;
-    return {
-      jcw_option: option(),
-      jcw_color: checkedVal('jcw_color_ui'),
-      jcw_size_system: checkedVal('jcw_system_ui'),
-      jcw_size_men: active.indexOf('men') !== -1 ? sizeOf('men') : '',
-      jcw_size_women: active.indexOf('women') !== -1 ? sizeOf('women') : '',
-      jcw_engrave: engrave ? '1' : '',
-      jcw_name_men: engrave && active.indexOf('men') !== -1 ? nameOf('men') : '',
-      jcw_name_women: engrave && active.indexOf('women') !== -1 ? nameOf('women') : ''
-    };
+    const vals = {jcw_option: option(), jcw_color: checkedVal('jcw_color_ui'), jcw_size_system: checkedVal('jcw_system_ui')};
+    RINGS.forEach(function (ring) {
+      const on = active.indexOf(ring) !== -1;
+      const engrave = on && engraves(ring);
+      vals['jcw_size_' + ring] = on ? sizeOf(ring) : '';
+      vals['jcw_engrave_' + ring] = engrave ? '1' : '';
+      vals['jcw_name_' + ring] = engrave ? nameOf(ring) : '';
+    });
+    return vals;
   }
   function syncFields() {
     const vals = values();
@@ -125,16 +134,20 @@ jQuery(function ($) {
   function validate() {
     const vals = values();
     const list = (sizes[vals.jcw_size_system] || []).map(s => s.v);
-    const active = rings();
     const checks = {
-      jcw_option_box: prices[vals.jcw_option] !== undefined,
+      jcw_option_box: optionProblem() === '',
       jcw_color_box: !data.hasColors || vals.jcw_color !== '',
-      jcw_system_box: vals.jcw_size_system === 'eu' || vals.jcw_size_system === 'us',
-      jcw_size_box: active.length > 0 && active.every(ring => list.indexOf(sizeOf(ring)) !== -1),
-      jcw_engrave_box: !engraving() || (engravedCount() > 0 && active.every(ring => nameOf(ring).length <= max))
+      jcw_system_box: vals.jcw_size_system === 'eu' || vals.jcw_size_system === 'us'
     };
-    Object.keys(checks).forEach(id => $root.find('#' + id).toggleClass('jc-invalid', !checks[id]));
-    active.forEach(ring => $root.find('#jcw_size_' + ring).toggleClass('jc-invalid-control', list.indexOf(sizeOf(ring)) === -1));
+    rings().forEach(function (ring) {
+      const sizeOk = list.indexOf(sizeOf(ring)) !== -1;
+      const nameOk = !engraves(ring) || (nameOf(ring) !== '' && nameOf(ring).length <= max);
+      checks['jcw_ring_' + ring] = sizeOk && nameOk;
+      $root.find('#jcw_size_' + ring).toggleClass('jc-invalid-control', !sizeOk);
+      $root.find('#jcw_name_' + ring).toggleClass('jc-invalid-control', !nameOk);
+    });
+    if (!rings().length) $root.find('.jcw-option-msg').text(optionProblem()).prop('hidden', false);
+    $root.find('.jc-box').each(function () { if (checks[this.id] !== undefined) $(this).toggleClass('jc-invalid', !checks[this.id]); });
     return Object.keys(checks).every(id => checks[id]);
   }
   function scrollToInvalid() {
@@ -142,13 +155,16 @@ jQuery(function ($) {
     if (!$first.length) return;
     const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({top: Math.max(0, window.scrollY + $first[0].getBoundingClientRect().top - 110), behavior: reducedMotion ? 'auto' : 'smooth'});
-    const $focus = $first.find('input:visible,select:visible').first();
+    const $focus = $first.find('.jc-invalid-control:visible, input:visible, select:visible').first();
     if ($focus.length) window.setTimeout(function () { try { $focus[0].focus({preventScroll: true}); } catch (e) { /* no-op */ } }, reducedMotion ? 0 : 400);
   }
 
   /* ---- Events ------------------------------------------------------- */
   function refresh() { updateVisibility(); updateCounters(); syncFields(); updatePrice(); }
-  $root.on('change', 'input[name="jcw_option_ui"], #jcw_engrave', refresh);
+  $root.on('change', 'input[name="jcw_ring_ui"], .jcw-engrave-toggle input', refresh);
+  $root.on('change', '.jcw-engrave-toggle input', function () {
+    if (this.checked) $(this).closest('.jcw-ring').find('.jcw-name input').trigger('focus');
+  });
   $root.on('input change', '.jcw-name input', refresh);
   $root.on('change', 'input[name="jcw_system_ui"]', function () { populateSizes(); syncFields(); });
   $root.on('change', '.jcw-size select', syncFields);

@@ -136,3 +136,11 @@ Version 1.3.1:
 - Admin notice + front-end note (shop managers only) naming the function, file and line of
   the code that had registered it, so it can be removed.
 - New alias [jpc_configurator] that no old code can collide with.
+
+Version 1.3.2: Wedding rings, per-ring choices
+- Instead of choosing one of Ζευγάρι / Ανδρική / Γυναικεία, the customer ticks Ανδρική
+  and/or Γυναικεία. Both ticked = the pair (normal WooCommerce price); one ticked = that
+  ring's own price. A ring without its own price shows "μόνο σε ζευγάρι".
+- Each ticked ring gets its own box with its own size and its own engraving tick + text.
+  Engraving fee applies per engraved ring.
+- Carts created with 1.3.0/1.3.1 (single engraving tick) keep working.
