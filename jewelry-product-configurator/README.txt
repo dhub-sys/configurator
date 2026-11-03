@@ -185,3 +185,11 @@ Version 1.4.1:
 - Fix: in the product's "Βέρες" tab, the colour combination rows were laid out by
   WooCommerce's panel styles (labels stacked in the left column, second dropdown hidden).
   Each combination is now one line: Ανδρική [colour] + Γυναικεία [colour] → Φωτογραφία ✕.
+
+Version 1.4.2:
+- Wedding colour list: 9 standard colours in this order: Κίτρινο, Λευκό, Ροζ,
+  Κίτρινο - Λευκό, Λευκό - Κίτρινο, Κίτρινο - Ροζ, Ροζ - Κίτρινο, Λευκό - Ροζ, Ροζ - Λευκό.
+  One-time merge on upgrade: existing colours keep their key (products keep their colours
+  and photos), missing ones are added, custom colours go after them.
+- Settings > Χρώματα βερών: ↑ ↓ buttons to change the order.
+- Product > Βέρες: link to the colour list (new colours and order are managed there).

@@ -33,6 +33,7 @@ final class JPC_Wedding {
         add_action('woocommerce_product_data_panels', [__CLASS__, 'product_panel']);
         add_action('woocommerce_admin_process_product_object', [__CLASS__, 'save_product']);
         add_action('admin_init', [__CLASS__, 'register_settings']);
+        add_action('admin_init', [__CLASS__, 'merge_default_colors']);
     }
 
     /* ------------------------------------------------------------------
@@ -49,9 +50,40 @@ final class JPC_Wedding {
             ['key' => 'yellow', 'name' => 'Κίτρινο', 'c1' => '#d9bb58', 'c2' => ''],
             ['key' => 'white', 'name' => 'Λευκό', 'c1' => '#e3e3e3', 'c2' => ''],
             ['key' => 'rose', 'name' => 'Ροζ', 'c1' => '#e0a58c', 'c2' => ''],
-            ['key' => 'rose-white', 'name' => 'Ροζ - Λευκό', 'c1' => '#e0a58c', 'c2' => '#e3e3e3'],
             ['key' => 'yellow-white', 'name' => 'Κίτρινο - Λευκό', 'c1' => '#d9bb58', 'c2' => '#e3e3e3'],
+            ['key' => 'white-yellow', 'name' => 'Λευκό - Κίτρινο', 'c1' => '#e3e3e3', 'c2' => '#d9bb58'],
+            ['key' => 'yellow-rose', 'name' => 'Κίτρινο - Ροζ', 'c1' => '#d9bb58', 'c2' => '#e0a58c'],
+            ['key' => 'rose-yellow', 'name' => 'Ροζ - Κίτρινο', 'c1' => '#e0a58c', 'c2' => '#d9bb58'],
+            ['key' => 'white-rose', 'name' => 'Λευκό - Ροζ', 'c1' => '#e3e3e3', 'c2' => '#e0a58c'],
+            ['key' => 'rose-white', 'name' => 'Ροζ - Λευκό', 'c1' => '#e0a58c', 'c2' => '#e3e3e3'],
         ];
+    }
+    /**
+     * One-time (1.4.2): bring a saved colour list to the 9 standard colours in the standard
+     * order. Existing colours keep their key (so products keep them and their photos), found
+     * by key or by name; missing ones are added; any custom colours go after them.
+     */
+    public static function merge_default_colors() {
+        if (get_option('jpc_wedding_colors_merged') === '1') return;
+        $saved = get_option(self::COLORS_OPTION, null);
+        if (is_array($saved)) {
+            $norm = static function ($name) { return mb_strtolower(preg_replace('/\s*[-–—]\s*/u', '-', trim((string) $name))); };
+            $merged = [];
+            $used = [];
+            foreach (self::default_colors() as $default) {
+                $match = null;
+                foreach ($saved as $i => $color) {
+                    if (isset($used[$i]) || !is_array($color)) continue;
+                    if (($color['key'] ?? '') === $default['key'] || $norm($color['name'] ?? '') === $norm($default['name'])) { $match = $i; break; }
+                }
+                if ($match === null) { $merged[] = $default; continue; }
+                $used[$match] = true;
+                $merged[] = $saved[$match];
+            }
+            foreach ($saved as $i => $color) if (!isset($used[$i]) && is_array($color)) $merged[] = $color;
+            update_option(self::COLORS_OPTION, $merged);
+        }
+        update_option('jpc_wedding_colors_merged', '1', false);
     }
     /** Shop-wide colour list: [['key','name','c1','c2'], ...]. */
     public static function colors() {
@@ -109,7 +141,7 @@ final class JPC_Wedding {
         echo '<tr><th scope="row"><label for="jpc_w_max">Χάραξη: μέγιστοι χαρακτήρες</label></th><td><input type="number" min="1" max="100" id="jpc_w_max" name="' . esc_attr(self::ENGRAVE_MAX_OPTION) . '" value="' . esc_attr(self::engrave_max()) . '" style="width:80px"></td></tr>';
         echo '<tr><th scope="row"><label for="jpc_w_fee">Χάραξη: χρέωση ανά βέρα (' . esc_html(get_woocommerce_currency_symbol()) . ')</label></th><td><input type="text" id="jpc_w_fee" name="' . esc_attr(self::ENGRAVE_FEE_OPTION) . '" value="' . esc_attr(get_option(self::ENGRAVE_FEE_OPTION, '')) . '" placeholder="Δωρεάν" style="width:100px"><p class="description">Κενό = δωρεάν χάραξη.</p></td></tr>';
         echo '</tbody></table>';
-        echo '<h3>Χρώματα βερών</h3><p class="description">Τα χρώματα που μπορείτε να ενεργοποιήσετε σε κάθε προϊόν. Για δίχρωμα σχέδια τσεκάρετε «Δίχρωμο» και διαλέξτε το 2ο χρώμα του δείγματος.</p>';
+        echo '<h3>Χρώματα βερών</h3><p class="description">Τα χρώματα που μπορείτε να ενεργοποιήσετε σε κάθε προϊόν, με τη σειρά που εμφανίζονται (↑ ↓ για αλλαγή σειράς). Για δίχρωμα σχέδια τσεκάρετε «Δίχρωμο» και διαλέξτε το 2ο χρώμα του δείγματος.</p>';
         echo '<table class="widefat striped" id="jpc_w_colors" style="max-width:720px"><thead><tr><th>Όνομα</th><th>Χρώμα</th><th>Δίχρωμο</th><th>2ο χρώμα</th><th></th></tr></thead><tbody>';
         $base = esc_attr(self::COLORS_OPTION);
         $row = static function ($i, $c) use ($base) {
@@ -119,7 +151,7 @@ final class JPC_Wedding {
                 . '<td><input type="color" name="' . $base . '[' . $i . '][c1]" value="' . esc_attr($c['c1'] ?: '#cccccc') . '"></td>'
                 . '<td><input type="checkbox" name="' . $base . '[' . $i . '][two]" value="1" ' . checked($two, true, false) . '></td>'
                 . '<td><input type="color" name="' . $base . '[' . $i . '][c2]" value="' . esc_attr($c['c2'] ?: '#e3e3e3') . '"></td>'
-                . '<td><button type="button" class="button-link jpc-w-remove" aria-label="Διαγραφή">✕</button></td></tr>';
+                . '<td style="white-space:nowrap"><button type="button" class="button-link jpc-w-up" aria-label="Μετακίνηση πάνω" title="Πάνω">↑</button> <button type="button" class="button-link jpc-w-down" aria-label="Μετακίνηση κάτω" title="Κάτω">↓</button> &nbsp; <button type="button" class="button-link jpc-w-remove" aria-label="Διαγραφή" title="Διαγραφή">✕</button></td></tr>';
         };
         foreach ($colors as $i => $c) echo $row($i, $c); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         echo '</tbody></table>';
@@ -137,6 +169,10 @@ final class JPC_Wedding {
             table.insertAdjacentHTML('beforeend', template.replace(/__i__/g, String(next++)));
           });
           table.addEventListener('click', function (e) {
+            var tr = e.target.closest('tr');
+            // The saved order is the row order (the form posts rows in document order).
+            if (e.target.classList.contains('jpc-w-up') && tr.previousElementSibling) tr.parentNode.insertBefore(tr, tr.previousElementSibling);
+            if (e.target.classList.contains('jpc-w-down') && tr.nextElementSibling) tr.parentNode.insertBefore(tr.nextElementSibling, tr);
             if (e.target.classList.contains('jpc-w-remove')) {
               if (window.confirm('Διαγραφή χρώματος; Θα αφαιρεθεί και από τα προϊόντα που το έχουν.')) e.target.closest('tr').remove();
             }
@@ -169,7 +205,7 @@ final class JPC_Wedding {
                 'value' => $product ? $product->get_meta($key, true, 'edit') : '',
             ]);
         }
-        echo '</div><div class="options_group"><p class="form-field"><label>Διαθέσιμα χρώματα</label><span class="description" style="display:block">Τσεκάρετε τα χρώματα του σχεδίου. Προαιρετικά, φωτογραφία ανά χρώμα: εμφανίζεται στη θέση της βασικής φωτογραφίας όταν ο πελάτης το επιλέγει. Κανένα χρώμα = δεν εμφανίζεται επιλογή χρώματος.</span></p>';
+        echo '</div><div class="options_group"><p class="form-field"><label>Διαθέσιμα χρώματα</label><span class="description" style="display:block">Τσεκάρετε τα χρώματα του σχεδίου. Προαιρετικά, φωτογραφία ανά χρώμα: εμφανίζεται στη θέση της βασικής φωτογραφίας όταν ο πελάτης το επιλέγει. Κανένα χρώμα = δεν εμφανίζεται επιλογή χρώματος. Νέα χρώματα και σειρά: <a href="' . esc_url(admin_url('admin.php?page=jpc-settings#jpc_w_colors')) . '" target="_blank">WooCommerce → Jewelry Configurator → Χρώματα βερών</a>.</span></p>';
         $selected = $product ? (array) $product->get_meta(self::PRODUCT_COLORS_KEY, true, 'edit') : [];
         $images = $product ? (array) $product->get_meta(self::PRODUCT_COLOR_IMAGES_KEY, true, 'edit') : [];
         foreach (self::colors() as $color) {
