@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.3.4
+ * Version: 1.3.5
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.3.4';
+    const VERSION = '1.3.5';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -78,6 +78,7 @@ final class JPC_Product_Configurator {
         add_action('after_setup_theme', [__CLASS__, 'disable_legacy_hooks'], PHP_INT_MAX);
         add_action('init', [__CLASS__, 'disable_legacy_hooks'], PHP_INT_MAX);
         add_action('wp_loaded', [__CLASS__, 'disable_legacy_hooks'], PHP_INT_MAX);
+        add_action('wp_enqueue_scripts', [__CLASS__, 'dequeue_legacy_script'], PHP_INT_MAX);
         add_filter('woocommerce_add_to_cart_validation', [__CLASS__, 'validate'], 10, 6);
         add_filter('woocommerce_add_cart_item_data', [__CLASS__, 'save_cart_item'], 10, 3);
         add_filter('woocommerce_get_item_data', [__CLASS__, 'display_cart_data'], 10, 2);
@@ -880,7 +881,7 @@ final class JPC_Product_Configurator {
                 foreach ((array) $items as $item) {
                     $ref = self::callback_reflection($item['function'] ?? null);
                     if (!$ref || $ref->getFileName() !== $file) continue;
-                    $found[] = [$hook, $ref->getName(), (int) $ref->getStartLine()];
+                    $found[] = [$hook, self::callback_label($ref), (int) $ref->getStartLine(), $ref];
                 }
             }
         }
@@ -921,9 +922,21 @@ final class JPC_Product_Configurator {
         if ($value === 'yes' && ($file = get_transient('jpc_foreign_file'))) update_option(self::LEGACY_FILE_OPTION, $file, false);
         return $value;
     }
-    /** Only the old configurator's own functions (jc_…) in that one file; the rest of the theme is untouched. */
-    private static function is_legacy_function($name) {
-        return stripos($name, 'jc_') === 0;
+    /**
+     * Only the old configurator in that one file: functions named jc_…, and anonymous
+     * functions whose code uses jc_… (its cart validation, cart/order data and script
+     * loading). Anything else in the file, e.g. the notices CSS, is left alone.
+     */
+    private static function is_legacy_callback($ref) {
+        if (stripos($ref->getName(), 'jc_') === 0) return true;
+        if (!($ref instanceof ReflectionFunction) || !$ref->isClosure()) return false;
+        $lines = @file($ref->getFileName());
+        if (!$lines) return false;
+        $code = implode('', array_slice($lines, $ref->getStartLine() - 1, $ref->getEndLine() - $ref->getStartLine() + 1));
+        return stripos($code, 'jc_') !== false;
+    }
+    private static function callback_label($ref) {
+        return $ref->isClosure() ? 'ανώνυμη συνάρτηση' : $ref->getName();
     }
     public static function disable_legacy_hooks() {
         global $wp_filter;
@@ -935,12 +948,17 @@ final class JPC_Product_Configurator {
             foreach ($callbacks as $priority => $items) {
                 foreach ((array) $items as $item) {
                     $ref = self::callback_reflection($item['function'] ?? null);
-                    if (!$ref || $ref->getFileName() !== $file || !self::is_legacy_function($ref->getName())) continue;
+                    if (!$ref || $ref->getFileName() !== $file || !self::is_legacy_callback($ref)) continue;
                     remove_filter($hook, $item['function'], $priority);
-                    self::$legacy_removed[] = [$hook, $ref->getName(), (int) $ref->getStartLine()];
+                    self::$legacy_removed[] = [$hook, self::callback_label($ref), (int) $ref->getStartLine()];
                 }
             }
         }
+    }
+    /** The old theme script, in case it is enqueued some other way. */
+    public static function dequeue_legacy_script() {
+        if (get_option(self::LEGACY_OPTION, 'no') !== 'yes') return;
+        wp_dequeue_script('jewelry-config');
     }
     /** Settings page section for the switch. */
     private static function legacy_settings_section() {
@@ -949,9 +967,9 @@ final class JPC_Product_Configurator {
         $short = defined('ABSPATH') && strpos($file, ABSPATH) === 0 ? substr($file, strlen(ABSPATH)) : $file;
         $on = get_option(self::LEGACY_OPTION, 'no') === 'yes';
         echo '<h2>Παλιός configurator στο theme</h2>';
-        echo '<p>Βρέθηκε παλιός κώδικας configurator στο <code>' . esc_html($short) . '</code>. Μπορεί να απενεργοποιηθεί από εδώ χωρίς να αλλάξει το αρχείο: το plugin αποσυνδέει μόνο τις συναρτήσεις του που αρχίζουν από <code>jc_</code> σε αυτό το αρχείο. Ο υπόλοιπος κώδικας του theme δεν επηρεάζεται. Ξετσεκάρετε για επαναφορά.</p>';
+        echo '<p>Βρέθηκε παλιός κώδικας configurator στο <code>' . esc_html($short) . '</code>. Μπορεί να απενεργοποιηθεί από εδώ χωρίς να αλλάξει το αρχείο: το plugin αποσυνδέει μόνο τον παλιό configurator σε αυτό το αρχείο (συναρτήσεις <code>jc_…</code> και ανώνυμες συναρτήσεις που τις χρησιμοποιούν) και το παλιό <code>jewelry-config.js</code>. Ο υπόλοιπος κώδικας του theme δεν επηρεάζεται. Ξετσεκάρετε για επαναφορά.</p>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="' . esc_attr(self::LEGACY_OPTION) . '" value="yes" ' . checked($on, true, false) . '> <strong>Απενεργοποίηση του παλιού configurator του theme</strong></label>';
-        $list = $on ? self::$legacy_removed : array_values(array_filter(self::hooks_from_file($file), static function ($h) { return self::is_legacy_function($h[1]); }));
+        $list = $on ? self::$legacy_removed : array_values(array_filter(self::hooks_from_file($file), static function ($h) { return self::is_legacy_callback($h[3]); }));
         if ($list) {
             echo '<p class="description">' . ($on ? 'Απενεργοποιημένα τώρα:' : 'Θα απενεργοποιηθούν:') . '</p><ul style="list-style:disc;margin-left:20px">';
             foreach ($list as [$hook, $function, $line]) echo '<li><code>' . esc_html($function) . '</code> → <code>' . esc_html($hook) . '</code> (γραμμή ' . (int) $line . ')</li>';

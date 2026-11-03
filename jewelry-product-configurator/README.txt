@@ -157,3 +157,9 @@ Version 1.3.4:
   (useful when the Theme File Editor is disabled, e.g. by DISALLOW_FILE_EDIT). Only the
   functions named jc_… in that one file are unhooked; the rest of the theme is untouched.
   Untick to restore. The admin notice links to it.
+
+Version 1.3.5:
+- The "disable old theme configurator" switch now also covers the old code's anonymous
+  functions that use jc_… (its cart validation, cart item data, cart display, order meta
+  and the jewelry-config.js loader), and dequeues jewelry-config.js. Other code in the
+  same file (e.g. the WooCommerce notices CSS) is left alone.
