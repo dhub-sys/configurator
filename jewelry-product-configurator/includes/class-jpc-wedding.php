@@ -193,6 +193,13 @@ final class JPC_Wedding {
         $colors = self::colors();
         $combos = $product ? $product->get_meta(self::PRODUCT_COMBO_IMAGES_KEY, true, 'edit') : [];
         if (!is_array($combos)) $combos = []; // never saved yet: get_meta() returns ''
+        echo '<style>'
+            . '.jpc-w-combos .jpc-w-combo-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}'
+            . '.jpc-w-combos .jpc-w-combo-part{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}'
+            . '.woocommerce_options_panel .jpc-w-combos .jpc-w-combo-row select{float:none;width:auto;min-width:150px;margin:0}'
+            . '.jpc-w-combos .jpc-media-preview img{display:block;max-width:40px!important;padding:0!important}'
+            . '.jpc-w-combos .jpc-w-combo-remove{color:#b32d2e;text-decoration:none;font-size:16px}'
+            . '</style>';
         echo '<div class="options_group jpc-w-combos"><p class="form-field"><label>Φωτογραφίες συνδυασμών</label><span class="description" style="display:block">Προαιρετικά: φωτογραφία για όταν ο πελάτης διαλέγει <em>διαφορετικό</em> χρώμα στην ανδρική και στη γυναικεία (π.χ. ανδρική Κίτρινο + γυναικεία Ροζ - Λευκό). Για συνδυασμούς χωρίς δική τους φωτογραφία δείχνεται η φωτογραφία του χρώματος που επιλέχθηκε τελευταίο.</span></p>';
         $row = static function ($i, $men, $women, $image_id) use ($colors) {
             $options = static function ($selected) use ($colors) {
@@ -202,14 +209,17 @@ final class JPC_Wedding {
             };
             $field_id = 'jpc_w_combo_img_' . $i;
             $preview = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : '';
-            return '<p class="form-field jpc-w-combo-row">'
-                . '<label>Ανδρική <select name="jpc_w_combo[' . $i . '][men]">' . $options($men) . '</select></label> '
-                . '<label>+ Γυναικεία <select name="jpc_w_combo[' . $i . '][women]">' . $options($women) . '</select></label> '
+            // One line per combination. WooCommerce floats every <label> in this panel into the
+            // left column, so only the row title is a label; the rest are inline spans.
+            return '<p class="form-field jpc-w-combo-row"><label>Συνδυασμός</label>'
+                . '<span class="jpc-w-combo-part">Ανδρική <select name="jpc_w_combo[' . $i . '][men]" aria-label="Χρώμα ανδρικής">' . $options($men) . '</select></span>'
+                . '<span class="jpc-w-combo-part">+ Γυναικεία <select name="jpc_w_combo[' . $i . '][women]" aria-label="Χρώμα γυναικείας">' . $options($women) . '</select></span>'
+                . '<span class="jpc-w-combo-part">→ '
                 . '<input type="hidden" id="' . esc_attr($field_id) . '" name="jpc_w_combo[' . $i . '][image]" value="' . esc_attr($image_id ?: '') . '">'
                 . '<button type="button" class="button jpc-media-select" data-target="#' . esc_attr($field_id) . '">Φωτογραφία</button> '
                 . '<button type="button" class="button jpc-media-clear" data-target="#' . esc_attr($field_id) . '"' . ($image_id ? '' : ' style="display:none;"') . '>Καθαρισμός</button> '
-                . '<button type="button" class="button-link jpc-w-combo-remove" aria-label="Διαγραφή συνδυασμού">✕</button>'
-                . '<span class="jpc-media-preview" style="display:inline-block;margin-left:8px;vertical-align:middle">' . ($preview ? '<img src="' . esc_url($preview) . '" alt="" style="max-width:40px;height:auto;border:1px solid #ddd">' : '') . '</span></p>';
+                . '<span class="jpc-media-preview">' . ($preview ? '<img src="' . esc_url($preview) . '" alt="" style="max-width:40px;height:auto;border:1px solid #ddd">' : '') . '</span>'
+                . '<button type="button" class="button-link jpc-w-combo-remove" aria-label="Διαγραφή συνδυασμού">✕</button></span></p>';
         };
         echo '<div class="jpc-w-combo-list">';
         $i = 0;

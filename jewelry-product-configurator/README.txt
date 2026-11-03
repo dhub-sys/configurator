@@ -180,3 +180,8 @@ Version 1.4.0:
 - Product > Βέρες > "Φωτογραφίες συνδυασμών": optional photo for a men's colour + women's
   colour combination (e.g. men's Κίτρινο + women's Ροζ - Λευκό). Shown when the customer
   picks exactly that combination; otherwise the photo of the colour chosen last.
+
+Version 1.4.1:
+- Fix: in the product's "Βέρες" tab, the colour combination rows were laid out by
+  WooCommerce's panel styles (labels stacked in the left column, second dropdown hidden).
+  Each combination is now one line: Ανδρική [colour] + Γυναικεία [colour] → Φωτογραφία ✕.
