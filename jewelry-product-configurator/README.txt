@@ -158,3 +158,10 @@ Version 1.3.7:
 - With the "disable old theme configurator" switch on, the managers-only note about the
   theme's [jewelry_configurator] is no longer shown on product pages (the theme still
   registers it, but it is already handled).
+
+Version 1.3.8:
+- Colour/Yellow-Gold photo swap finds the product's main photo anywhere on the page by
+  file name (YOOtheme Gallery/Slideshow/Image with a dynamic source, not only the Woo
+  Product Images element). Related products, upsells, header and footer are skipped.
+- Fix: switching from one colour with a photo to another colour with a photo did not
+  change the image (the already-swapped image was no longer recognised).

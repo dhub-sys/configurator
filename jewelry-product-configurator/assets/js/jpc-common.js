@@ -137,9 +137,26 @@ window.JPCCommon = (function ($) {
     }).get();
   }
   /** Images showing the main product photo. Fallback: the first slide and the first thumbnail. */
+  /**
+   * Any image on the page showing the product's main photo, whatever element renders it
+   * (YOOtheme Gallery/Slideshow/Image with a dynamic source, native gallery, zoom…), found
+   * by file name. Other products' areas and the site chrome are skipped.
+   */
+  function pageImagesOfMainPhoto() {
+    if (!mainStems.size) return [];
+    return Array.prototype.filter.call(document.querySelectorAll('img'), function (img) {
+      if (img.closest('.jewelry-configurator, .jpc-wedding, .related, .upsells, .cross-sells, header, footer, nav, .tm-header, .tm-footer, .uk-navbar-container, .woocommerce-product-gallery__trigger')) return false;
+      return isMainProductImage(img);
+    });
+  }
+  // Images currently showing an alternate photo: their file name no longer matches the
+  // main photo, so they are remembered here to be found again on the next swap.
+  const swappedNodes = [];
   function mainImageNodes() {
     const all = galleryImages();
-    const matched = all.filter(isMainProductImage);
+    const matched = swappedNodes.filter(function (img) { return img.isConnected; });
+    all.filter(isMainProductImage).forEach(function (img) { if (matched.indexOf(img) === -1) matched.push(img); });
+    pageImagesOfMainPhoto().forEach(function (img) { if (matched.indexOf(img) === -1) matched.push(img); });
     if (matched.length) return matched;
     const first = [];
     const big = all.filter(function (img) { return !isThumbnail(img); });
@@ -169,6 +186,7 @@ window.JPCCommon = (function ($) {
   function applyImageDataToNode(img, imageData) {
     if (!img || !imageData || !imageData.src) return;
     const state = snapshotImage(img);
+    if (swappedNodes.indexOf(img) === -1) swappedNodes.push(img);
     const thumb = isThumbnail(img);
     const src = thumb && imageData.thumb ? imageData.thumb : imageData.src;
     const srcset = thumb ? (imageData.thumbSrcset || '') : (imageData.srcset || '');
@@ -205,6 +223,8 @@ window.JPCCommon = (function ($) {
       s.parent.insertBefore(s.node, img2 || null);
     });
     imageStates.delete(img);
+    const index = swappedNodes.indexOf(img);
+    if (index !== -1) swappedNodes.splice(index, 1);
   }
   /** Bring the slide with the main photo into view, so the change is visible. */
   function showMainSlide(nodes) {
@@ -227,7 +247,8 @@ window.JPCCommon = (function ($) {
     return nodes;
   }
   function restoreImages() {
-    galleryImages().forEach(restoreImageNode);
+    // Every image that was swapped, wherever it is on the page.
+    swappedNodes.slice().forEach(restoreImageNode);
     refreshGallery();
   }
   function refreshGallery() {
