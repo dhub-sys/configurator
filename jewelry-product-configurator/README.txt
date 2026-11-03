@@ -153,3 +153,8 @@ Version 1.3.6 (= 1.3.2 + switch for the old theme configurator; 1.3.3–1.3.5 wi
   jewelry-config.js. Other code in the file (e.g. WooCommerce notices CSS) stays. Untick to
   restore. The admin notice links to it.
 - Not included: the 1.3.3 diagnostics (JavaScript check note, hook list in the notice).
+
+Version 1.3.7:
+- With the "disable old theme configurator" switch on, the managers-only note about the
+  theme's [jewelry_configurator] is no longer shown on product pages (the theme still
+  registers it, but it is already handled).

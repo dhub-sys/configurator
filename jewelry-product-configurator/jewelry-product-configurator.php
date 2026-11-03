@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.3.6
+ * Version: 1.3.7
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.3.6';
+    const VERSION = '1.3.7';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -971,6 +971,8 @@ final class JPC_Product_Configurator {
     /** Shop managers only: note above the configurator when a foreign shortcode was overridden. */
     private static function foreign_shortcode_banner() {
         if (self::$foreign_shortcode === '' || !current_user_can('manage_woocommerce')) return '';
+        // With the switch on, the old code is already handled: nothing for the manager to do.
+        if (get_option(self::LEGACY_OPTION, 'no') === 'yes') return '';
         return '<div class="jpc-debug" style="border:2px dashed #e10600;background:#fff6f5;color:#600;padding:10px 12px;margin:0 0 16px;font-size:13px">'
             . '<strong>Jewelry Configurator — μόνο για διαχειριστές:</strong> το <code>[jewelry_configurator]</code> το είχε καταχωρήσει και άλλος κώδικας: <code>'
             . esc_html(self::$foreign_shortcode) . '</code>. Το plugin το πήρε πίσω· σβήστε τον παλιό κώδικα.</div>';
