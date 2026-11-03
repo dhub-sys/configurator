@@ -17,7 +17,7 @@ jQuery(function ($) {
     } catch (e) { /* fall through */ }
     return {eu: [], us: []};
   })();
-  const fieldNames = ['jcw_option', 'jcw_color', 'jcw_size_system', 'jcw_size_men', 'jcw_size_women',
+  const fieldNames = ['jcw_option', 'jcw_color_men', 'jcw_color_women', 'jcw_size_system', 'jcw_size_men', 'jcw_size_women',
     'jcw_engrave_men', 'jcw_engrave_women', 'jcw_name_men', 'jcw_name_women'];
 
   const checkedVal = name => $root.find('input[name="' + name + '"]:checked').val() || '';
@@ -27,6 +27,7 @@ jQuery(function ($) {
   const engraves = ring => $root.find('#jcw_engrave_' + ring).is(':checked');
   const nameOf = ring => String($root.find('#jcw_name_' + ring).val() || '').trim();
   const sizeOf = ring => String($root.find('#jcw_size_' + ring).val() || '');
+  const colorOf = ring => checkedVal('jcw_color_' + ring + '_ui');
   const engravedCount = () => rings().filter(ring => engraves(ring) && nameOf(ring) !== '').length;
 
   /** Why the ticked combination cannot be bought, or ''. */
@@ -63,8 +64,16 @@ jQuery(function ($) {
   /* ---- Colour photo ------------------------------------------------- */
   common.setMainImage(data.mainImage);
   let shownColor = '';
+  let lastColorRing = '';
+  /** The photo follows the colour chosen last; with one ring ticked, that ring's colour. */
+  function photoColor() {
+    const active = rings();
+    if (active.length === 1) return colorOf(active[0]);
+    if (lastColorRing && active.indexOf(lastColorRing) !== -1 && colorOf(lastColorRing)) return colorOf(lastColorRing);
+    return active.map(colorOf).filter(Boolean)[0] || '';
+  }
   function updateImage() {
-    const color = checkedVal('jcw_color_ui');
+    const color = photoColor();
     const image = color && data.colorImages ? data.colorImages[color] : null;
     if (image && image.src) {
       const nodes = common.showImage(image);
@@ -75,6 +84,12 @@ jQuery(function ($) {
       shownColor = '';
     }
   }
+  function updateColorNames() {
+    RINGS.forEach(function (ring) {
+      const $checked = $root.find('input[name="jcw_color_' + ring + '_ui"]:checked');
+      $root.find('#jcw_ring_' + ring + ' .jcw-color-name').text($checked.attr('data-name') || '');
+    });
+  }
 
   /* ---- Sizes / visibility ------------------------------------------- */
   function populateSizes() {
@@ -82,7 +97,7 @@ jQuery(function ($) {
     RINGS.forEach(function (ring) {
       const $select = $root.find('#jcw_size_' + ring);
       const previous = String($select.val() || '');
-      $select.empty().append($('<option>', {value: '', text: 'Επιλέξτε νούμερο…'}));
+      $select.empty().append($('<option>', {value: '', text: list.length ? 'Επιλέξτε νούμερο…' : 'Επιλέξτε τύπο μεγέθους'}));
       list.forEach(s => $select.append($('<option>', {value: s.v, text: s.l})));
       $select.val(list.some(s => s.v === previous) ? previous : '');
     });
@@ -107,11 +122,12 @@ jQuery(function ($) {
   /* ---- Hidden fields for the cart form ------------------------------ */
   function values() {
     const active = rings();
-    const vals = {jcw_option: option(), jcw_color: checkedVal('jcw_color_ui'), jcw_size_system: checkedVal('jcw_system_ui')};
+    const vals = {jcw_option: option(), jcw_size_system: checkedVal('jcw_system_ui')};
     RINGS.forEach(function (ring) {
       const on = active.indexOf(ring) !== -1;
       const engrave = on && engraves(ring);
       vals['jcw_size_' + ring] = on ? sizeOf(ring) : '';
+      vals['jcw_color_' + ring] = on ? colorOf(ring) : '';
       vals['jcw_engrave_' + ring] = engrave ? '1' : '';
       vals['jcw_name_' + ring] = engrave ? nameOf(ring) : '';
     });
@@ -134,15 +150,15 @@ jQuery(function ($) {
   function validate() {
     const vals = values();
     const list = (sizes[vals.jcw_size_system] || []).map(s => s.v);
-    const checks = {
-      jcw_option_box: optionProblem() === '',
-      jcw_color_box: !data.hasColors || vals.jcw_color !== '',
-      jcw_system_box: vals.jcw_size_system === 'eu' || vals.jcw_size_system === 'us'
-    };
+    const systemOk = vals.jcw_size_system === 'eu' || vals.jcw_size_system === 'us';
+    $root.find('#jcw_system_row').toggleClass('jcw-row-invalid', !systemOk);
+    const checks = {jcw_option_box: optionProblem() === '' && systemOk};
     rings().forEach(function (ring) {
+      const colorOk = !data.hasColors || colorOf(ring) !== '';
       const sizeOk = list.indexOf(sizeOf(ring)) !== -1;
       const nameOk = !engraves(ring) || (nameOf(ring) !== '' && nameOf(ring).length <= max);
-      checks['jcw_ring_' + ring] = sizeOk && nameOk;
+      checks['jcw_ring_' + ring] = colorOk && sizeOk && nameOk;
+      $root.find('#jcw_ring_' + ring + ' .jcw-color-row').toggleClass('jcw-row-invalid', !colorOk);
       $root.find('#jcw_size_' + ring).toggleClass('jc-invalid-control', !sizeOk);
       $root.find('#jcw_name_' + ring).toggleClass('jc-invalid-control', !nameOk);
     });
@@ -162,13 +178,18 @@ jQuery(function ($) {
   /* ---- Events ------------------------------------------------------- */
   function refresh() { updateVisibility(); updateCounters(); syncFields(); updatePrice(); }
   $root.on('change', 'input[name="jcw_ring_ui"], .jcw-engrave-toggle input', refresh);
+  $root.on('change', 'input[name="jcw_ring_ui"]', updateImage);
   $root.on('change', '.jcw-engrave-toggle input', function () {
     if (this.checked) $(this).closest('.jcw-ring').find('.jcw-name input').trigger('focus');
   });
   $root.on('input change', '.jcw-name input', refresh);
-  $root.on('change', 'input[name="jcw_system_ui"]', function () { populateSizes(); syncFields(); });
+  $root.on('change', 'input[name="jcw_system_ui"]', function () { $root.find('#jcw_system_row').removeClass('jcw-row-invalid'); populateSizes(); syncFields(); });
   $root.on('change', '.jcw-size select', syncFields);
-  $root.on('change', 'input[name="jcw_color_ui"]', function () { syncFields(); updateImage(); });
+  $root.on('change', '.jcw-swatches input', function () {
+    lastColorRing = $(this).closest('.jcw-ring').attr('data-ring') || '';
+    $(this).closest('.jcw-color-row').removeClass('jcw-row-invalid');
+    updateColorNames(); syncFields(); updateImage();
+  });
   $root.on('change input', 'input,select', function () {
     $(this).closest('.jc-box').removeClass('jc-invalid');
     $(this).removeClass('jc-invalid-control');
@@ -181,6 +202,7 @@ jQuery(function ($) {
   $(document).on('submit', 'form.cart', guard);
 
   populateSizes();
+  updateColorNames();
   refresh();
   updateImage();
 });

@@ -165,3 +165,11 @@ Version 1.3.8:
   Product Images element). Related products, upsells, header and footer are skipped.
 - Fix: switching from one colour with a photo to another colour with a photo did not
   change the image (the already-swapped image was no longer recognised).
+
+Version 1.3.9: Wedding rings, colour per ring + compact layout
+- Each ring (men's / women's) has its own colour choice. Cart/order show "Χρώμα ανδρικής"
+  and "Χρώμα γυναικείας". Carts created before 1.3.9 (one colour) still display correctly.
+- The photo follows the colour chosen last; with one ring ticked, that ring's colour.
+- Compact layout: one top box (rings + prices + pair price, size system as EU/US buttons,
+  material), then one box per ring with colour (small round swatches + selected name),
+  size and engraving on compact rows.

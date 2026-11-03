@@ -267,47 +267,60 @@ final class JPC_Wedding {
         $price_html = static function ($amount) use ($product) { return wp_kses_post(wc_price(wc_get_price_to_display($product, ['price' => $amount]))); };
         // Both rings ticked = the pair; a ring can be ticked alone only if it has its own price.
         $default = isset($prices['pair']) ? ['men', 'women'] : array_values(array_intersect(['men', 'women'], array_keys($prices)));
+        $single_color = count($colors) === 1 ? $colors[0] : null;
         ob_start(); ?>
-        <div class="jpc-wedding" data-jc-wedding="1" data-jc-source="plugin-<?php echo esc_attr(JPC_Product_Configurator::VERSION); ?>" data-jc-sizes="<?php echo esc_attr(wp_json_encode($sizes)); ?>">
+        <div class="jpc-wedding jcw-compact" data-jc-wedding="1" data-jc-source="plugin-<?php echo esc_attr(JPC_Product_Configurator::VERSION); ?>" data-jc-sizes="<?php echo esc_attr(wp_json_encode($sizes)); ?>">
           <div class="jc-grid">
             <div id="jcw_option_box" class="<?php echo esc_attr($box); ?> jc-box-full">
-              <h4 class="jc-box-title">Επιλογή βέρας</h4>
-              <div class="jc-radio-group">
-                <?php foreach (['men' => 'Ανδρική', 'women' => 'Γυναικεία'] as $ring => $label) :
-                  $alone = isset($prices[$ring]);
-                  if (!$alone && !isset($prices['pair'])) continue; ?>
-                  <label class="jc-radio-option"><input type="checkbox" name="jcw_ring_ui" value="<?php echo esc_attr($ring); ?>"<?php checked(in_array($ring, $default, true)); ?>><span><?php echo esc_html($label); ?></span><span class="jc-metal-price"><?php echo $alone ? $price_html($prices[$ring]) : 'μόνο σε ζευγάρι'; ?></span></label>
-                <?php endforeach; ?>
+              <div class="jcw-row">
+                <span class="jcw-label">Βέρα</span>
+                <div class="jcw-choices">
+                  <?php foreach (['men' => 'Ανδρική', 'women' => 'Γυναικεία'] as $ring => $label) :
+                    $alone = isset($prices[$ring]);
+                    if (!$alone && !isset($prices['pair'])) continue; ?>
+                    <label class="jc-radio-option"><input type="checkbox" name="jcw_ring_ui" value="<?php echo esc_attr($ring); ?>"<?php checked(in_array($ring, $default, true)); ?>><span><?php echo esc_html($label); ?></span><span class="jc-metal-price"><?php echo $alone ? $price_html($prices[$ring]) : 'μόνο σε ζευγάρι'; ?></span></label>
+                  <?php endforeach; ?>
+                  <?php if (isset($prices['pair'])) : ?><span class="jcw-pair-note">Ζευγάρι: <strong><?php echo $price_html($prices['pair']); ?></strong></span><?php endif; ?>
+                </div>
               </div>
-              <?php if (isset($prices['pair'])) : ?><p class="jcw-pair-note">Και οι δύο (ζευγάρι): <strong><?php echo $price_html($prices['pair']); ?></strong></p><?php endif; ?>
               <p class="jcw-option-msg" hidden></p>
-              <?php if (self::material() !== '') : ?><p class="jcw-material">Υλικό: <strong><?php echo esc_html(self::material()); ?></strong></p><?php endif; ?>
-            </div>
-            <?php if ($colors) : ?>
-            <div id="jcw_color_box" class="<?php echo esc_attr($box); ?> jc-box-full">
-              <h4 class="jc-box-title">Χρώμα</h4>
-              <div class="jc-swatches jcw-swatches" role="radiogroup" aria-label="Χρώμα">
-                <?php foreach ($colors as $color) : ?>
-                  <label class="jc-swatch jcw-swatch" title="<?php echo esc_attr($color['name']); ?>"><input type="radio" name="jcw_color_ui" value="<?php echo esc_attr($color['key']); ?>"<?php checked(count($colors) === 1); ?>><span class="jc-swatch-tile" aria-hidden="true" style="background:<?php echo esc_attr(self::swatch_css($color)); ?>"></span><span class="jcw-swatch-name"><?php echo esc_html($color['name']); ?></span></label>
-                <?php endforeach; ?>
+              <div class="jcw-row" id="jcw_system_row">
+                <span class="jcw-label">Μέγεθος</span>
+                <div class="jcw-segmented" role="radiogroup" aria-label="Τύπος μεγέθους">
+                  <label><input type="radio" name="jcw_system_ui" value="eu"><span>Ευρωπαϊκά</span></label><label><input type="radio" name="jcw_system_ui" value="us"><span>Αμερικάνικα</span></label>
+                </div>
+                <?php if (self::material() !== '') : ?><span class="jcw-material"><?php echo esc_html(self::material()); ?></span><?php endif; ?>
               </div>
-            </div>
-            <?php endif; ?>
-            <div id="jcw_system_box" class="<?php echo esc_attr($box); ?> jc-box-full">
-              <h4 class="jc-box-title">Τύπος Μεγέθους</h4>
-              <div class="jc-radio-group"><label class="jc-radio-option"><input type="radio" name="jcw_system_ui" value="eu"><span>Ευρωπαϊκά</span></label><label class="jc-radio-option"><input type="radio" name="jcw_system_ui" value="us"><span>Αμερικάνικα</span></label></div>
             </div>
             <?php foreach (['men' => 'Ανδρική βέρα', 'women' => 'Γυναικεία βέρα'] as $ring => $title) : ?>
             <div id="jcw_ring_<?php echo esc_attr($ring); ?>" class="<?php echo esc_attr($box); ?> jc-box-half jcw-ring" data-ring="<?php echo esc_attr($ring); ?>">
               <h4 class="jc-box-title"><?php echo esc_html($title); ?></h4>
-              <label class="jcw-size"><span>Νούμερο</span><select id="jcw_size_<?php echo esc_attr($ring); ?>" class="jc-control uk-select"><option value="">Επιλέξτε νούμερο…</option></select></label>
-              <label class="jc-radio-option jcw-engrave-toggle"><input type="checkbox" id="jcw_engrave_<?php echo esc_attr($ring); ?>"><span>Χάραξη ονόματος<?php if ($fee > 0) echo ' <small>(+' . $price_html($fee) . ')</small>'; ?></span></label>
-              <label class="jcw-name" hidden><span>Κείμενο χάραξης</span><input type="text" id="jcw_name_<?php echo esc_attr($ring); ?>" class="jc-control uk-input" maxlength="<?php echo (int) $max; ?>" autocomplete="off" placeholder="π.χ. όνομα ή ημερομηνία"><small class="jcw-counter">0/<?php echo (int) $max; ?></small></label>
+              <?php if ($colors) : ?>
+              <div class="jcw-row jcw-color-row">
+                <span class="jcw-label">Χρώμα</span>
+                <div class="jcw-swatches" role="radiogroup" aria-label="Χρώμα <?php echo esc_attr(self::RING_LABELS[$ring]); ?>">
+                  <?php foreach ($colors as $color) : ?>
+                    <label class="jcw-swatch" title="<?php echo esc_attr($color['name']); ?>"><input type="radio" name="jcw_color_<?php echo esc_attr($ring); ?>_ui" value="<?php echo esc_attr($color['key']); ?>" data-name="<?php echo esc_attr($color['name']); ?>"<?php checked($single_color !== null); ?> aria-label="<?php echo esc_attr($color['name']); ?>"><span class="jcw-swatch-tile" aria-hidden="true" style="background:<?php echo esc_attr(self::swatch_css($color)); ?>"></span></label>
+                  <?php endforeach; ?>
+                </div>
+                <span class="jcw-color-name"><?php echo $single_color ? esc_html($single_color['name']) : ''; ?></span>
+              </div>
+              <?php endif; ?>
+              <div class="jcw-row">
+                <label class="jcw-label" for="jcw_size_<?php echo esc_attr($ring); ?>">Νούμερο</label>
+                <select id="jcw_size_<?php echo esc_attr($ring); ?>" class="jc-control uk-select uk-form-small"><option value="">Επιλέξτε τύπο μεγέθους</option></select>
+              </div>
+              <div class="jcw-row">
+                <label class="jc-radio-option jcw-engrave-toggle"><input type="checkbox" id="jcw_engrave_<?php echo esc_attr($ring); ?>"><span>Χάραξη ονόματος<?php if ($fee > 0) echo ' <small>(+' . $price_html($fee) . ')</small>'; ?></span></label>
+              </div>
+              <div class="jcw-name" hidden>
+                <input type="text" id="jcw_name_<?php echo esc_attr($ring); ?>" class="jc-control uk-input uk-form-small" maxlength="<?php echo (int) $max; ?>" autocomplete="off" placeholder="Κείμενο χάραξης (π.χ. όνομα, ημερομηνία)" aria-label="Κείμενο χάραξης <?php echo esc_attr(self::RING_LABELS[$ring]); ?>"><small class="jcw-counter">0/<?php echo (int) $max; ?></small>
+              </div>
             </div>
             <?php endforeach; ?>
           </div>
         </div>
-        <?php foreach (['jcw_enabled' => '1', 'jcw_option' => '', 'jcw_color' => '', 'jcw_size_system' => '', 'jcw_size_men' => '', 'jcw_size_women' => '', 'jcw_engrave_men' => '', 'jcw_engrave_women' => '', 'jcw_name_men' => '', 'jcw_name_women' => ''] as $name => $value) : ?>
+        <?php foreach (['jcw_enabled' => '1', 'jcw_option' => '', 'jcw_color_men' => '', 'jcw_color_women' => '', 'jcw_size_system' => '', 'jcw_size_men' => '', 'jcw_size_women' => '', 'jcw_engrave_men' => '', 'jcw_engrave_women' => '', 'jcw_name_men' => '', 'jcw_name_women' => ''] as $name => $value) : ?>
         <input type="hidden" name="<?php echo esc_attr($name); ?>" value="<?php echo esc_attr($value); ?>">
         <?php endforeach;
         return ob_get_clean();
@@ -349,7 +362,7 @@ final class JPC_Wedding {
         return isset($_POST[$key]) && is_scalar($_POST[$key]) ? sanitize_text_field(wp_unslash($_POST[$key])) : '';
     }
     public static function selection() {
-        return ['option' => self::posted('jcw_option'), 'color' => sanitize_key(self::posted('jcw_color')), 'size_system' => self::posted('jcw_size_system'),
+        return ['option' => self::posted('jcw_option'), 'color_men' => sanitize_key(self::posted('jcw_color_men')), 'color_women' => sanitize_key(self::posted('jcw_color_women')), 'size_system' => self::posted('jcw_size_system'),
             'size_men' => self::posted('jcw_size_men'), 'size_women' => self::posted('jcw_size_women'),
             'engrave_men' => self::posted('jcw_engrave_men') === '1', 'engrave_women' => self::posted('jcw_engrave_women') === '1',
             'name_men' => self::posted('jcw_name_men'), 'name_women' => self::posted('jcw_name_women')];
@@ -357,6 +370,10 @@ final class JPC_Wedding {
     /** Engraving wanted on a ring (also reads carts saved by 1.3.0, which had one "engrave" flag). */
     private static function engraves($cfg, $ring) {
         return array_key_exists('engrave_' . $ring, $cfg) ? !empty($cfg['engrave_' . $ring]) : !empty($cfg['engrave']);
+    }
+    /** A ring's colour (carts saved before 1.3.9 had one colour for both rings). */
+    private static function color_of($cfg, $ring) {
+        return array_key_exists('color_' . $ring, $cfg) ? (string) $cfg['color_' . $ring] : (string) ($cfg['color'] ?? '');
     }
     /** Returns '' when valid, otherwise a message for the customer. */
     public static function error($cfg, $product) {
@@ -366,7 +383,9 @@ final class JPC_Wedding {
             return $cfg['option'] === 'pair' ? 'Το ζευγάρι δεν διατίθεται.' : 'Η ' . ($cfg['option'] === 'men' ? 'ανδρική' : 'γυναικεία') . ' βέρα πωλείται μόνο σε ζευγάρι.';
         }
         $colors = array_column(self::product_colors($product), 'key');
-        if ($colors && !in_array($cfg['color'], $colors, true)) return 'Επιλέξτε χρώμα.';
+        foreach (self::rings($cfg['option']) as $ring) {
+            if ($colors && !in_array(self::color_of($cfg, $ring), $colors, true)) return 'Επιλέξτε χρώμα ' . self::RING_LABELS[$ring] . '.';
+        }
         $sizes = JPC_Product_Configurator::category_fields($product->get_id())['sizes'];
         if (!isset($sizes[$cfg['size_system']])) return 'Επιλέξτε τύπο μεγέθους.';
         foreach (self::rings($cfg['option']) as $ring) {
@@ -384,10 +403,10 @@ final class JPC_Wedding {
         foreach (['men', 'women'] as $ring) {
             $used = in_array($ring, $rings, true);
             $cfg['engrave_' . $ring] = $used && self::engraves($cfg, $ring) && $cfg['name_' . $ring] !== '';
-            if (!$used) $cfg['size_' . $ring] = '';
+            if (!$used) { $cfg['size_' . $ring] = ''; $cfg['color_' . $ring] = ''; }
             if (!$cfg['engrave_' . $ring]) $cfg['name_' . $ring] = '';
         }
-        unset($cfg['engrave']);
+        unset($cfg['engrave'], $cfg['color']);
         return $cfg;
     }
     public static function engraved_count($cfg) {
@@ -405,7 +424,13 @@ final class JPC_Wedding {
     public static function labels($cfg) {
         $rows = ['Επιλογή' => self::OPTION_LABELS[$cfg['option']] ?? ''];
         if (self::material() !== '') $rows['Υλικό'] = self::material();
-        if ($cfg['color'] !== '' && ($color = self::color($cfg['color']))) $rows['Χρώμα'] = $color['name'];
+        if (!array_key_exists('color_men', $cfg) && !empty($cfg['color']) && ($color = self::color($cfg['color']))) {
+            $rows['Χρώμα'] = $color['name']; // carts from before 1.3.9
+        }
+        foreach (['men', 'women'] as $ring) {
+            $key = $cfg['color_' . $ring] ?? '';
+            if ($key !== '' && ($color = self::color($key))) $rows['Χρώμα ' . self::RING_LABELS[$ring]] = $color['name'];
+        }
         if ($cfg['size_system'] !== '') $rows['Τύπος Μεγέθους'] = $cfg['size_system'] === 'eu' ? 'Ευρωπαϊκά' : 'Αμερικάνικα';
         foreach (['men', 'women'] as $ring) {
             if ($cfg['size_' . $ring] !== '') $rows['Νούμερο ' . self::RING_LABELS[$ring]] = JPC_Product_Configurator::size_label($cfg['size_' . $ring]);

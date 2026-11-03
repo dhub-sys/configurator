@@ -189,49 +189,141 @@
   cursor: not-allowed;
 }
 
-/* ---- Wedding rings ---- */
-.jpc-wedding[data-jc-wedding="1"] .jcw-material {
-  margin: 12px 0 0;
-  font-size: 0.95em;
+/* ---- Wedding rings (compact layout) ---- */
+.jpc-wedding[data-jc-wedding="1"] .jc-grid {
+  gap: 12px;
 }
-.jpc-wedding[data-jc-wedding="1"] .jcw-swatch {
-  flex-direction: column;
-  gap: 6px;
+.jpc-wedding[data-jc-wedding="1"] .jc-box-title {
+  margin: 0 0 8px;
+  font-size: 15px;
 }
-.jpc-wedding[data-jc-wedding="1"] .jcw-swatch-name {
-  font-size: 12px;
-  line-height: 1.2;
-  text-align: center;
-  max-width: 76px;
+.jpc-wedding[data-jc-wedding="1"] .jcw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 0 0 8px;
 }
-.jpc-wedding[data-jc-wedding="1"] .jcw-size,
-.jpc-wedding[data-jc-wedding="1"] .jcw-name {
-  display: block;
-  margin: 0 0 10px;
+.jpc-wedding[data-jc-wedding="1"] .jcw-row:last-child {
+  margin-bottom: 0;
 }
-.jpc-wedding[data-jc-wedding="1"] .jcw-size > span,
-.jpc-wedding[data-jc-wedding="1"] .jcw-name > span {
-  display: block;
-  margin-bottom: 4px;
+.jpc-wedding[data-jc-wedding="1"] .jcw-label {
+  min-width: 64px;
   font-size: 0.9em;
+  font-weight: 600;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jc-metal-price {
+  font-size: 0.85em;
 }
 .jpc-wedding[data-jc-wedding="1"] .jcw-pair-note {
-  margin: 10px 0 0;
-  font-size: 0.95em;
-}
-.jpc-wedding[data-jc-wedding="1"] .jcw-option-msg {
-  margin: 8px 0 0;
-  color: #e10600;
   font-size: 0.9em;
 }
+.jpc-wedding[data-jc-wedding="1"] .jcw-material {
+  margin-left: auto;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-option-msg {
+  margin: -2px 0 8px;
+  color: #e10600;
+  font-size: 0.85em;
+}
+/* EU / US as a small segmented control */
+.jpc-wedding[data-jc-wedding="1"] .jcw-segmented {
+  display: inline-flex;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-segmented label {
+  margin: 0;
+  cursor: pointer;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-segmented span {
+  display: block;
+  padding: 4px 12px;
+  font-size: 0.85em;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-segmented label + label span {
+  border-left: 1px solid rgba(0, 0, 0, 0.2);
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-segmented input:checked + span {
+  background: #111;
+  color: #fff;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-segmented input:focus-visible + span {
+  outline: 2px solid #111;
+  outline-offset: -3px;
+}
+/* Small colour swatches, selected colour name beside them */
+.jpc-wedding[data-jc-wedding="1"] .jcw-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-swatch {
+  position: relative;
+  margin: 0;
+  cursor: pointer;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-swatch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-swatch-tile {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-swatch input:checked + .jcw-swatch-tile {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #111;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-swatch input:focus-visible + .jcw-swatch-tile {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #555;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-color-name {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-row select {
+  flex: 1 1 140px;
+  max-width: 220px;
+}
 .jpc-wedding[data-jc-wedding="1"] .jcw-engrave-toggle {
-  margin: 4px 0 8px;
+  font-size: 0.9em;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-name input {
+  flex: 1 1 auto;
 }
 .jpc-wedding[data-jc-wedding="1"] .jcw-counter {
-  display: block;
-  text-align: right;
   font-size: 0.8em;
   opacity: 0.6;
+  white-space: nowrap;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-row-invalid {
+  outline: 2px solid #e10600;
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 .jpc-wedding[data-jc-wedding="1"] .jcw-ring .jc-invalid-control {
   border: 2px solid #e10600 !important;
