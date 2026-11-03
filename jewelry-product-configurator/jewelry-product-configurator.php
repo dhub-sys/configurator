@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.3.5
+ * Version: 1.3.6
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.3.5';
+    const VERSION = '1.3.6';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -741,7 +741,6 @@ final class JPC_Product_Configurator {
         echo '<p class="description">Νούμερα: κενά πεδία = προεπιλογή (EU 47–58, US 5–13, ανά 1). Για μισά νούμερα βάλτε βήμα 0.5 (π.χ. US 5 – 13 ανά 0.5 → 5, 5½, 6 …).</p>';
         echo '<p class="description"><strong>Τύπος «Βέρες»:</strong> αντί για επιλογή μετάλλου, ο πελάτης διαλέγει ζευγάρι ή μεμονωμένη βέρα, χρώμα, νούμερα και χάραξη. Η στήλη «Χρώμα χρυσού» δεν ισχύει εκεί· τα νούμερα ακολουθούν τις στήλες EU/US.</p>';
         JPC_Wedding::settings_section();
-        echo '<div id="jpc-legacy"></div>';
         self::legacy_settings_section();
         echo '<h2>Εμφάνιση τιμών</h2><fieldset>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::LABEL_PRICES_OPTION).'" value="yes" '.checked(get_option(self::LABEL_PRICES_OPTION, 'yes'), 'yes', false).'> Τιμή δίπλα σε κάθε μέταλλο στη σελίδα προϊόντος (π.χ. «Πλατίνα — 1.250 €»)</label>';
@@ -849,44 +848,11 @@ final class JPC_Product_Configurator {
             self::$foreign_shortcode = self::describe_callback($current);
             // Remember it for the admin notice (snippets often run on the front end only).
             set_transient('jpc_foreign_shortcode', self::$foreign_shortcode, WEEK_IN_SECONDS);
-            $file = self::callback_file($current);
-            if ($file) set_transient('jpc_foreign_file', $file, WEEK_IN_SECONDS);
+            $ref = self::callback_reflection($current);
+            $file = $ref ? (string) $ref->getFileName() : '';
+            if ($file !== '' && strpos($file, "eval()'d code") === false) set_transient('jpc_foreign_file', $file, WEEK_IN_SECONDS);
         }
         add_shortcode('jewelry_configurator', [__CLASS__, 'shortcode']);
-    }
-    private static function callback_reflection($callback) {
-        try {
-            if (is_string($callback) && strpos($callback, '::') !== false) $callback = explode('::', $callback, 2);
-            if (is_array($callback)) return new ReflectionMethod($callback[0], $callback[1]);
-            if (is_string($callback) || $callback instanceof Closure) return new ReflectionFunction($callback);
-        } catch (Throwable $e) { /* not inspectable */ }
-        return null;
-    }
-    private static function callback_file($callback) {
-        $ref = self::callback_reflection($callback);
-        $file = $ref ? (string) $ref->getFileName() : '';
-        return $file !== '' && strpos($file, "eval()'d code") === false ? $file : '';
-    }
-    /**
-     * Everything else the old code in $file hooks into (cart validation, cart data,
-     * scripts…): [['hook', 'function', line], ...]. Read-only; nothing is unhooked.
-     */
-    private static function hooks_from_file($file) {
-        global $wp_filter;
-        $found = [];
-        if (!$file || empty($wp_filter)) return $found;
-        foreach ($wp_filter as $hook => $holder) {
-            $callbacks = is_object($holder) && isset($holder->callbacks) ? $holder->callbacks : (is_array($holder) ? $holder : []);
-            foreach ($callbacks as $priority => $items) {
-                foreach ((array) $items as $item) {
-                    $ref = self::callback_reflection($item['function'] ?? null);
-                    if (!$ref || $ref->getFileName() !== $file) continue;
-                    $found[] = [$hook, self::callback_label($ref), (int) $ref->getStartLine(), $ref];
-                }
-            }
-        }
-        usort($found, static function ($a, $b) { return $a[2] <=> $b[2]; });
-        return $found;
     }
     private static function describe_callback($callback) {
         try {
@@ -907,10 +873,16 @@ final class JPC_Product_Configurator {
         }
     }
     /* ------------------------------------------------------------------
-     * Old configurator in the theme: optional neutralising switch
+     * Old configurator in the theme: optional switch to disable it
      * ------------------------------------------------------------------ */
-    /** Hooks removed in this request: [['hook', 'function', line], ...]. */
-    private static $legacy_removed = [];
+    private static function callback_reflection($callback) {
+        try {
+            if (is_string($callback) && strpos($callback, '::') !== false) $callback = explode('::', $callback, 2);
+            if (is_array($callback)) return new ReflectionMethod($callback[0], $callback[1]);
+            if (is_string($callback) || $callback instanceof Closure) return new ReflectionFunction($callback);
+        } catch (Throwable $e) { /* not inspectable */ }
+        return null;
+    }
     /** The file the old [jewelry_configurator] came from (remembered once the switch is on). */
     private static function legacy_file() {
         $file = get_option(self::LEGACY_FILE_OPTION, '') ?: get_transient('jpc_foreign_file');
@@ -935,24 +907,31 @@ final class JPC_Product_Configurator {
         $code = implode('', array_slice($lines, $ref->getStartLine() - 1, $ref->getEndLine() - $ref->getStartLine() + 1));
         return stripos($code, 'jc_') !== false;
     }
-    private static function callback_label($ref) {
-        return $ref->isClosure() ? 'ανώνυμη συνάρτηση' : $ref->getName();
-    }
-    public static function disable_legacy_hooks() {
+    /** Old-configurator callbacks currently hooked from $file: [['hook', 'label', line, priority, callback], ...]. */
+    private static function legacy_hooks($file) {
         global $wp_filter;
-        if (get_option(self::LEGACY_OPTION, 'no') !== 'yes' || empty($wp_filter)) return;
-        $file = self::legacy_file();
-        if ($file === '') return;
+        $found = [];
+        if ($file === '' || empty($wp_filter)) return $found;
         foreach ($wp_filter as $hook => $holder) {
             $callbacks = is_object($holder) && isset($holder->callbacks) ? $holder->callbacks : [];
             foreach ($callbacks as $priority => $items) {
                 foreach ((array) $items as $item) {
                     $ref = self::callback_reflection($item['function'] ?? null);
                     if (!$ref || $ref->getFileName() !== $file || !self::is_legacy_callback($ref)) continue;
-                    remove_filter($hook, $item['function'], $priority);
-                    self::$legacy_removed[] = [$hook, self::callback_label($ref), (int) $ref->getStartLine()];
+                    $found[] = [$hook, $ref->isClosure() ? 'ανώνυμη συνάρτηση' : $ref->getName(), (int) $ref->getStartLine(), $priority, $item['function']];
                 }
             }
+        }
+        usort($found, static function ($a, $b) { return $a[2] <=> $b[2]; });
+        return $found;
+    }
+    /** Hooks removed in this request. */
+    private static $legacy_removed = [];
+    public static function disable_legacy_hooks() {
+        if (get_option(self::LEGACY_OPTION, 'no') !== 'yes') return;
+        foreach (self::legacy_hooks(self::legacy_file()) as $entry) {
+            remove_filter($entry[0], $entry[4], $entry[3]);
+            self::$legacy_removed[] = $entry;
         }
     }
     /** The old theme script, in case it is enqueued some other way. */
@@ -960,65 +939,41 @@ final class JPC_Product_Configurator {
         if (get_option(self::LEGACY_OPTION, 'no') !== 'yes') return;
         wp_dequeue_script('jewelry-config');
     }
-    /** Settings page section for the switch. */
+    /** Settings page section for the switch (only when old code was detected). */
     private static function legacy_settings_section() {
         $file = self::legacy_file();
         if ($file === '') return;
         $short = defined('ABSPATH') && strpos($file, ABSPATH) === 0 ? substr($file, strlen(ABSPATH)) : $file;
         $on = get_option(self::LEGACY_OPTION, 'no') === 'yes';
-        echo '<h2>Παλιός configurator στο theme</h2>';
+        echo '<h2 id="jpc-legacy">Παλιός configurator στο theme</h2>';
         echo '<p>Βρέθηκε παλιός κώδικας configurator στο <code>' . esc_html($short) . '</code>. Μπορεί να απενεργοποιηθεί από εδώ χωρίς να αλλάξει το αρχείο: το plugin αποσυνδέει μόνο τον παλιό configurator σε αυτό το αρχείο (συναρτήσεις <code>jc_…</code> και ανώνυμες συναρτήσεις που τις χρησιμοποιούν) και το παλιό <code>jewelry-config.js</code>. Ο υπόλοιπος κώδικας του theme δεν επηρεάζεται. Ξετσεκάρετε για επαναφορά.</p>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="' . esc_attr(self::LEGACY_OPTION) . '" value="yes" ' . checked($on, true, false) . '> <strong>Απενεργοποίηση του παλιού configurator του theme</strong></label>';
-        $list = $on ? self::$legacy_removed : array_values(array_filter(self::hooks_from_file($file), static function ($h) { return self::is_legacy_callback($h[3]); }));
+        $list = $on ? self::$legacy_removed : self::legacy_hooks($file);
         if ($list) {
             echo '<p class="description">' . ($on ? 'Απενεργοποιημένα τώρα:' : 'Θα απενεργοποιηθούν:') . '</p><ul style="list-style:disc;margin-left:20px">';
-            foreach ($list as [$hook, $function, $line]) echo '<li><code>' . esc_html($function) . '</code> → <code>' . esc_html($hook) . '</code> (γραμμή ' . (int) $line . ')</li>';
+            foreach ($list as $entry) echo '<li><code>' . esc_html($entry[1]) . '</code> → <code>' . esc_html($entry[0]) . '</code> (γραμμή ' . (int) $entry[2] . ')</li>';
             echo '</ul>';
         }
-        echo '<p class="description">Το shortcode <code>[jewelry_configurator]</code> το παίρνει έτσι κι αλλιώς το plugin.</p>';
     }
     public static function shortcode_conflict_notice() {
         if (!current_user_can('manage_woocommerce')) return;
         $foreign = get_transient('jpc_foreign_shortcode');
         if (!$foreign) return;
         if (get_option(self::LEGACY_OPTION, 'no') === 'yes') {
-            echo '<div class="notice notice-info"><p><strong>Jewelry Configurator:</strong> ο παλιός configurator του theme είναι απενεργοποιημένος από το plugin (WooCommerce → Jewelry Configurator). Μπορείτε να τον σβήσετε από το αρχείο όποτε βολέψει.</p></div>';
+            echo '<div class="notice notice-info"><p><strong>Jewelry Configurator:</strong> ο παλιός configurator του theme είναι απενεργοποιημένος από το plugin (WooCommerce → Jewelry Configurator).</p></div>';
             return;
         }
         echo '<div class="notice notice-warning"><p><strong>Jewelry Configurator:</strong> το shortcode <code>[jewelry_configurator]</code> είχε καταχωρηθεί και από άλλον κώδικα, που ήταν αυτός που εκτελούνταν: <code>'
-            . esc_html($foreign) . '</code>. Το plugin το έχει πάρει πίσω, αλλά απενεργοποιήστε/σβήστε αυτόν τον παλιό κώδικα. Το μήνυμα σβήνει μόνο του μία εβδομάδα αφού πάψει να εντοπίζεται.</p>';
-        $file = get_transient('jpc_foreign_file');
-        $hooks = $file && is_readable($file) ? self::hooks_from_file($file) : [];
-        if ($hooks) {
-            $short = defined('ABSPATH') && strpos($file, ABSPATH) === 0 ? substr($file, strlen(ABSPATH)) : $file;
-            echo '<p>Ο ίδιος παλιός κώδικας (<code>' . esc_html($short) . '</code>) συνδέεται ακόμα και σε αυτά, που συγκρούονται με το plugin (π.χ. έλεγχος καλαθιού, δεδομένα παραγγελίας, scripts):</p><ul style="list-style:disc;margin-left:20px">';
-            foreach ($hooks as [$hook, $function, $line]) {
-                echo '<li><code>' . esc_html($function) . '</code> → <code>' . esc_html($hook) . '</code> (γραμμή ' . (int) $line . ')</li>';
-            }
-            echo '</ul>';
-        }
-        echo '<p><a class="button" href="' . esc_url(admin_url('admin.php?page=jpc-settings#jpc-legacy')) . '">Απενεργοποίηση χωρίς αλλαγή αρχείου</a></p>';
-        echo '</div>';
+            . esc_html($foreign) . '</code>. Το plugin το έχει πάρει πίσω, αλλά απενεργοποιήστε/σβήστε αυτόν τον παλιό κώδικα. Το μήνυμα σβήνει μόνο του μία εβδομάδα αφού πάψει να εντοπίζεται.</p>'
+            . (self::legacy_file() !== '' ? '<p><a class="button" href="' . esc_url(admin_url('admin.php?page=jpc-settings#jpc-legacy')) . '">Απενεργοποίηση χωρίς αλλαγή αρχείου</a></p>' : '')
+            . '</div>';
     }
     /** Shop managers only: note above the configurator when a foreign shortcode was overridden. */
-    /**
-     * Shop managers only: a note that appears after a few seconds unless the configurator's
-     * JavaScript starts and removes it, i.e. it shows when the script failed to run.
-     */
-    private static function js_check_banner() {
-        if (!current_user_can('manage_woocommerce')) return '';
-        return '<style>@keyframes jpcJsCheck{to{opacity:1;visibility:visible}}.jpc-js-check{opacity:0;visibility:hidden;animation:jpcJsCheck 0s 4s forwards}</style>'
-            . '<div class="jpc-debug jpc-js-check" style="border:2px dashed #e10600;background:#fff6f5;color:#600;padding:10px 12px;margin:0 0 16px;font-size:13px">'
-            . '<strong>Jewelry Configurator — μόνο για διαχειριστές:</strong> το JavaScript του configurator δεν εκτελέστηκε, γι’ αυτό δεν γεμίζουν τα νούμερα και δεν αλλάζει η τιμή. '
-            . 'Συνήθως φταίει σφάλμα σε άλλο script της σελίδας (π.χ. παλιός κώδικας του theme) ή plugin που συνενώνει/καθυστερεί JS (cache/optimization). '
-            . 'Πατήστε F12 → Console και δείτε το πρώτο κόκκινο σφάλμα.</div>';
-    }
     private static function foreign_shortcode_banner() {
-        $js = self::js_check_banner();
-        if (self::$foreign_shortcode === '' || !current_user_can('manage_woocommerce')) return $js;
+        if (self::$foreign_shortcode === '' || !current_user_can('manage_woocommerce')) return '';
         return '<div class="jpc-debug" style="border:2px dashed #e10600;background:#fff6f5;color:#600;padding:10px 12px;margin:0 0 16px;font-size:13px">'
             . '<strong>Jewelry Configurator — μόνο για διαχειριστές:</strong> το <code>[jewelry_configurator]</code> το είχε καταχωρήσει και άλλος κώδικας: <code>'
-            . esc_html(self::$foreign_shortcode) . '</code>. Το plugin το πήρε πίσω· σβήστε τον παλιό κώδικα.</div>' . $js;
+            . esc_html(self::$foreign_shortcode) . '</code>. Το plugin το πήρε πίσω· σβήστε τον παλιό κώδικα.</div>';
     }
     private static function render() {
         if (self::$rendered) return '';

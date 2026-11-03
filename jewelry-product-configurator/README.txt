@@ -145,21 +145,11 @@ Version 1.3.2: Wedding rings, per-ring choices
   Engraving fee applies per engraved ring.
 - Carts created with 1.3.0/1.3.1 (single engraving tick) keep working.
 
-Version 1.3.3 (diagnostics, shop managers only):
-- The "foreign shortcode" admin notice also lists every other hook the same old file still
-  uses (cart validation, cart data, scripts…), with function names and line numbers.
-- A note appears above the configurator after a few seconds if its JavaScript did not run
-  (sizes not filling, price not changing), pointing to the browser console.
-
-Version 1.3.4:
-- WooCommerce > Jewelry Configurator > "Παλιός configurator στο theme": a switch that
-  disables the old configurator found in the theme's functions.php without editing the file
-  (useful when the Theme File Editor is disabled, e.g. by DISALLOW_FILE_EDIT). Only the
-  functions named jc_… in that one file are unhooked; the rest of the theme is untouched.
-  Untick to restore. The admin notice links to it.
-
-Version 1.3.5:
-- The "disable old theme configurator" switch now also covers the old code's anonymous
-  functions that use jc_… (its cart validation, cart item data, cart display, order meta
-  and the jewelry-config.js loader), and dequeues jewelry-config.js. Other code in the
-  same file (e.g. the WooCommerce notices CSS) is left alone.
+Version 1.3.6 (= 1.3.2 + switch for the old theme configurator; 1.3.3–1.3.5 withdrawn):
+- WooCommerce > Jewelry Configurator > "Παλιός configurator στο theme": disables the old
+  configurator found in the theme's functions.php without editing the file. Unhooks only,
+  in that one file, functions named jc_… and anonymous functions that use jc_… (cart
+  validation, cart item data, cart display, order meta, script loader), and dequeues
+  jewelry-config.js. Other code in the file (e.g. WooCommerce notices CSS) stays. Untick to
+  restore. The admin notice links to it.
+- Not included: the 1.3.3 diagnostics (JavaScript check note, hook list in the notice).
