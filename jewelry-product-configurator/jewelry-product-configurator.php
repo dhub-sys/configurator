@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.3.3
+ * Version: 1.3.4
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.3.3';
+    const VERSION = '1.3.4';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -27,6 +27,8 @@ final class JPC_Product_Configurator {
     const DB_VERSION_OPTION = 'jpc_db_version';
     const LABEL_PRICES_OPTION = 'jpc_show_label_prices';
     const FROM_PRICE_OPTION = 'jpc_show_from_price';
+    const LEGACY_OPTION = 'jpc_disable_legacy';
+    const LEGACY_FILE_OPTION = 'jpc_legacy_file';
     /** Ring size defaults, used when a category has no custom range. */
     const DEFAULT_SIZES = ['eu' => [47, 58, 1], 'us' => [5, 13, 1]];
     /** Per-request cache of metal price tables, keyed by product ID. */
@@ -70,6 +72,12 @@ final class JPC_Product_Configurator {
         add_action('init', [__CLASS__, 'claim_shortcode'], PHP_INT_MAX);
         add_action('wp', [__CLASS__, 'claim_shortcode'], PHP_INT_MAX);
         add_action('admin_notices', [__CLASS__, 'shortcode_conflict_notice']);
+        // Optional switch: neutralise the old configurator left in the theme's functions.php,
+        // without editing the file. Runs after the theme has loaded and again later, in case
+        // the old code registers its hooks inside init.
+        add_action('after_setup_theme', [__CLASS__, 'disable_legacy_hooks'], PHP_INT_MAX);
+        add_action('init', [__CLASS__, 'disable_legacy_hooks'], PHP_INT_MAX);
+        add_action('wp_loaded', [__CLASS__, 'disable_legacy_hooks'], PHP_INT_MAX);
         add_filter('woocommerce_add_to_cart_validation', [__CLASS__, 'validate'], 10, 6);
         add_filter('woocommerce_add_cart_item_data', [__CLASS__, 'save_cart_item'], 10, 3);
         add_filter('woocommerce_get_item_data', [__CLASS__, 'display_cart_data'], 10, 2);
@@ -508,6 +516,7 @@ final class JPC_Product_Configurator {
         register_setting('jpc_settings', self::PLACEMENT_OPTION, ['type'=>'string', 'sanitize_callback'=>[__CLASS__, 'sanitize_placement'], 'default'=>'automatic']);
         register_setting('jpc_settings', self::LABEL_PRICES_OPTION, ['type'=>'string', 'sanitize_callback'=>[__CLASS__, 'sanitize_yes_no'], 'default'=>'yes']);
         register_setting('jpc_settings', self::FROM_PRICE_OPTION, ['type'=>'string', 'sanitize_callback'=>[__CLASS__, 'sanitize_yes_no'], 'default'=>'yes']);
+        register_setting('jpc_settings', self::LEGACY_OPTION, ['type'=>'string', 'sanitize_callback'=>[__CLASS__, 'sanitize_legacy'], 'default'=>'no']);
     }
     public static function sanitize_yes_no($value) {
         return $value === 'yes' ? 'yes' : 'no';
@@ -731,6 +740,8 @@ final class JPC_Product_Configurator {
         echo '<p class="description">Νούμερα: κενά πεδία = προεπιλογή (EU 47–58, US 5–13, ανά 1). Για μισά νούμερα βάλτε βήμα 0.5 (π.χ. US 5 – 13 ανά 0.5 → 5, 5½, 6 …).</p>';
         echo '<p class="description"><strong>Τύπος «Βέρες»:</strong> αντί για επιλογή μετάλλου, ο πελάτης διαλέγει ζευγάρι ή μεμονωμένη βέρα, χρώμα, νούμερα και χάραξη. Η στήλη «Χρώμα χρυσού» δεν ισχύει εκεί· τα νούμερα ακολουθούν τις στήλες EU/US.</p>';
         JPC_Wedding::settings_section();
+        echo '<div id="jpc-legacy"></div>';
+        self::legacy_settings_section();
         echo '<h2>Εμφάνιση τιμών</h2><fieldset>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::LABEL_PRICES_OPTION).'" value="yes" '.checked(get_option(self::LABEL_PRICES_OPTION, 'yes'), 'yes', false).'> Τιμή δίπλα σε κάθε μέταλλο στη σελίδα προϊόντος (π.χ. «Πλατίνα — 1.250 €»)</label>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::FROM_PRICE_OPTION).'" value="yes" '.checked(get_option(self::FROM_PRICE_OPTION, 'yes'), 'yes', false).'> «Από X €» στις λίστες προϊόντων όταν κάποιο μέταλλο είναι φθηνότερο από τον χρυσό</label>';
@@ -894,10 +905,68 @@ final class JPC_Product_Configurator {
             return 'άγνωστη προέλευση';
         }
     }
+    /* ------------------------------------------------------------------
+     * Old configurator in the theme: optional neutralising switch
+     * ------------------------------------------------------------------ */
+    /** Hooks removed in this request: [['hook', 'function', line], ...]. */
+    private static $legacy_removed = [];
+    /** The file the old [jewelry_configurator] came from (remembered once the switch is on). */
+    private static function legacy_file() {
+        $file = get_option(self::LEGACY_FILE_OPTION, '') ?: get_transient('jpc_foreign_file');
+        return is_string($file) && $file !== '' && is_readable($file) ? $file : '';
+    }
+    public static function sanitize_legacy($value) {
+        $value = $value === 'yes' ? 'yes' : 'no';
+        // Pin the detected file so the switch keeps working after the detection notice expires.
+        if ($value === 'yes' && ($file = get_transient('jpc_foreign_file'))) update_option(self::LEGACY_FILE_OPTION, $file, false);
+        return $value;
+    }
+    /** Only the old configurator's own functions (jc_…) in that one file; the rest of the theme is untouched. */
+    private static function is_legacy_function($name) {
+        return stripos($name, 'jc_') === 0;
+    }
+    public static function disable_legacy_hooks() {
+        global $wp_filter;
+        if (get_option(self::LEGACY_OPTION, 'no') !== 'yes' || empty($wp_filter)) return;
+        $file = self::legacy_file();
+        if ($file === '') return;
+        foreach ($wp_filter as $hook => $holder) {
+            $callbacks = is_object($holder) && isset($holder->callbacks) ? $holder->callbacks : [];
+            foreach ($callbacks as $priority => $items) {
+                foreach ((array) $items as $item) {
+                    $ref = self::callback_reflection($item['function'] ?? null);
+                    if (!$ref || $ref->getFileName() !== $file || !self::is_legacy_function($ref->getName())) continue;
+                    remove_filter($hook, $item['function'], $priority);
+                    self::$legacy_removed[] = [$hook, $ref->getName(), (int) $ref->getStartLine()];
+                }
+            }
+        }
+    }
+    /** Settings page section for the switch. */
+    private static function legacy_settings_section() {
+        $file = self::legacy_file();
+        if ($file === '') return;
+        $short = defined('ABSPATH') && strpos($file, ABSPATH) === 0 ? substr($file, strlen(ABSPATH)) : $file;
+        $on = get_option(self::LEGACY_OPTION, 'no') === 'yes';
+        echo '<h2>Παλιός configurator στο theme</h2>';
+        echo '<p>Βρέθηκε παλιός κώδικας configurator στο <code>' . esc_html($short) . '</code>. Μπορεί να απενεργοποιηθεί από εδώ χωρίς να αλλάξει το αρχείο: το plugin αποσυνδέει μόνο τις συναρτήσεις του που αρχίζουν από <code>jc_</code> σε αυτό το αρχείο. Ο υπόλοιπος κώδικας του theme δεν επηρεάζεται. Ξετσεκάρετε για επαναφορά.</p>';
+        echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="' . esc_attr(self::LEGACY_OPTION) . '" value="yes" ' . checked($on, true, false) . '> <strong>Απενεργοποίηση του παλιού configurator του theme</strong></label>';
+        $list = $on ? self::$legacy_removed : array_values(array_filter(self::hooks_from_file($file), static function ($h) { return self::is_legacy_function($h[1]); }));
+        if ($list) {
+            echo '<p class="description">' . ($on ? 'Απενεργοποιημένα τώρα:' : 'Θα απενεργοποιηθούν:') . '</p><ul style="list-style:disc;margin-left:20px">';
+            foreach ($list as [$hook, $function, $line]) echo '<li><code>' . esc_html($function) . '</code> → <code>' . esc_html($hook) . '</code> (γραμμή ' . (int) $line . ')</li>';
+            echo '</ul>';
+        }
+        echo '<p class="description">Το shortcode <code>[jewelry_configurator]</code> το παίρνει έτσι κι αλλιώς το plugin.</p>';
+    }
     public static function shortcode_conflict_notice() {
         if (!current_user_can('manage_woocommerce')) return;
         $foreign = get_transient('jpc_foreign_shortcode');
         if (!$foreign) return;
+        if (get_option(self::LEGACY_OPTION, 'no') === 'yes') {
+            echo '<div class="notice notice-info"><p><strong>Jewelry Configurator:</strong> ο παλιός configurator του theme είναι απενεργοποιημένος από το plugin (WooCommerce → Jewelry Configurator). Μπορείτε να τον σβήσετε από το αρχείο όποτε βολέψει.</p></div>';
+            return;
+        }
         echo '<div class="notice notice-warning"><p><strong>Jewelry Configurator:</strong> το shortcode <code>[jewelry_configurator]</code> είχε καταχωρηθεί και από άλλον κώδικα, που ήταν αυτός που εκτελούνταν: <code>'
             . esc_html($foreign) . '</code>. Το plugin το έχει πάρει πίσω, αλλά απενεργοποιήστε/σβήστε αυτόν τον παλιό κώδικα. Το μήνυμα σβήνει μόνο του μία εβδομάδα αφού πάψει να εντοπίζεται.</p>';
         $file = get_transient('jpc_foreign_file');
@@ -910,6 +979,7 @@ final class JPC_Product_Configurator {
             }
             echo '</ul>';
         }
+        echo '<p><a class="button" href="' . esc_url(admin_url('admin.php?page=jpc-settings#jpc-legacy')) . '">Απενεργοποίηση χωρίς αλλαγή αρχείου</a></p>';
         echo '</div>';
     }
     /** Shop managers only: note above the configurator when a foreign shortcode was overridden. */

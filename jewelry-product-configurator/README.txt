@@ -150,3 +150,10 @@ Version 1.3.3 (diagnostics, shop managers only):
   uses (cart validation, cart data, scripts…), with function names and line numbers.
 - A note appears above the configurator after a few seconds if its JavaScript did not run
   (sizes not filling, price not changing), pointing to the browser console.
+
+Version 1.3.4:
+- WooCommerce > Jewelry Configurator > "Παλιός configurator στο theme": a switch that
+  disables the old configurator found in the theme's functions.php without editing the file
+  (useful when the Theme File Editor is disabled, e.g. by DISALLOW_FILE_EDIT). Only the
+  functions named jc_… in that one file are unhooked; the rest of the theme is untouched.
+  Untick to restore. The admin notice links to it.
