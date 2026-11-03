@@ -63,25 +63,36 @@ jQuery(function ($) {
 
   /* ---- Colour photo ------------------------------------------------- */
   common.setMainImage(data.mainImage);
-  let shownColor = '';
+  let shownPhoto = '';
   let lastColorRing = '';
-  /** The photo follows the colour chosen last; with one ring ticked, that ring's colour. */
-  function photoColor() {
+  /**
+   * Which photo to show: a photo made for the exact men's + women's colour combination
+   * when both rings are ticked; otherwise the colour chosen last (with one ring ticked,
+   * that ring's colour). Returns {key, image} or null.
+   */
+  function photoChoice() {
     const active = rings();
-    if (active.length === 1) return colorOf(active[0]);
-    if (lastColorRing && active.indexOf(lastColorRing) !== -1 && colorOf(lastColorRing)) return colorOf(lastColorRing);
-    return active.map(colorOf).filter(Boolean)[0] || '';
+    const combos = data.comboImages || {};
+    if (active.length === 2 && colorOf('men') && colorOf('women')) {
+      const pair = colorOf('men') + '|' + colorOf('women');
+      if (combos[pair] && combos[pair].src) return {key: 'combo:' + pair, image: combos[pair]};
+    }
+    let color = '';
+    if (active.length === 1) color = colorOf(active[0]);
+    else if (lastColorRing && active.indexOf(lastColorRing) !== -1 && colorOf(lastColorRing)) color = colorOf(lastColorRing);
+    else color = active.map(colorOf).filter(Boolean)[0] || '';
+    const image = color && data.colorImages ? data.colorImages[color] : null;
+    return image && image.src ? {key: 'color:' + color, image: image} : null;
   }
   function updateImage() {
-    const color = photoColor();
-    const image = color && data.colorImages ? data.colorImages[color] : null;
-    if (image && image.src) {
-      const nodes = common.showImage(image);
-      if (nodes.length && shownColor !== color) common.showMainSlide(nodes);
-      shownColor = color;
-    } else if (shownColor) {
+    const choice = photoChoice();
+    if (choice) {
+      const nodes = common.showImage(choice.image);
+      if (nodes.length && shownPhoto !== choice.key) common.showMainSlide(nodes);
+      shownPhoto = choice.key;
+    } else if (shownPhoto) {
       common.restoreImages();
-      shownColor = '';
+      shownPhoto = '';
     }
   }
   function updateColorNames() {

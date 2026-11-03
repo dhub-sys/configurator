@@ -22,6 +22,8 @@ final class JPC_Wedding {
     const PRICE_KEYS = ['men' => '_jpc_w_price_men', 'women' => '_jpc_w_price_women'];
     const PRODUCT_COLORS_KEY = '_jpc_w_colors';
     const PRODUCT_COLOR_IMAGES_KEY = '_jpc_w_color_images';
+    /** Photos for a men's + women's colour combination: ['men_key|women_key' => attachment id]. */
+    const PRODUCT_COMBO_IMAGES_KEY = '_jpc_w_combo_images';
 
     const OPTION_LABELS = ['pair' => 'Ζευγάρι βερών (ανδρική + γυναικεία)', 'men' => 'Ανδρική βέρα', 'women' => 'Γυναικεία βέρα'];
     const RING_LABELS = ['men' => 'ανδρικής', 'women' => 'γυναικείας'];
@@ -182,7 +184,57 @@ final class JPC_Wedding {
             echo '<button type="button" class="button jpc-media-clear" data-target="#' . esc_attr($field_id) . '"' . ($image_id ? '' : ' style="display:none;"') . '>Καθαρισμός</button>';
             echo '<span class="jpc-media-preview" style="display:inline-block;margin-left:8px;vertical-align:middle">' . ($preview ? '<img src="' . esc_url($preview) . '" alt="" style="max-width:40px;height:auto;border:1px solid #ddd">' : '') . '</span></p>';
         }
-        echo '</div></div>';
+        echo '</div>';
+        self::combo_images_panel($product);
+        echo '</div>';
+    }
+    /** "Φωτογραφίες συνδυασμών": men's colour + women's colour → photo. */
+    private static function combo_images_panel($product) {
+        $colors = self::colors();
+        $combos = $product ? $product->get_meta(self::PRODUCT_COMBO_IMAGES_KEY, true, 'edit') : [];
+        if (!is_array($combos)) $combos = []; // never saved yet: get_meta() returns ''
+        echo '<div class="options_group jpc-w-combos"><p class="form-field"><label>Φωτογραφίες συνδυασμών</label><span class="description" style="display:block">Προαιρετικά: φωτογραφία για όταν ο πελάτης διαλέγει <em>διαφορετικό</em> χρώμα στην ανδρική και στη γυναικεία (π.χ. ανδρική Κίτρινο + γυναικεία Ροζ - Λευκό). Για συνδυασμούς χωρίς δική τους φωτογραφία δείχνεται η φωτογραφία του χρώματος που επιλέχθηκε τελευταίο.</span></p>';
+        $row = static function ($i, $men, $women, $image_id) use ($colors) {
+            $options = static function ($selected) use ($colors) {
+                $html = '<option value="">—</option>';
+                foreach ($colors as $c) $html .= '<option value="' . esc_attr($c['key']) . '"' . selected($selected, $c['key'], false) . '>' . esc_html($c['name']) . '</option>';
+                return $html;
+            };
+            $field_id = 'jpc_w_combo_img_' . $i;
+            $preview = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : '';
+            return '<p class="form-field jpc-w-combo-row">'
+                . '<label>Ανδρική <select name="jpc_w_combo[' . $i . '][men]">' . $options($men) . '</select></label> '
+                . '<label>+ Γυναικεία <select name="jpc_w_combo[' . $i . '][women]">' . $options($women) . '</select></label> '
+                . '<input type="hidden" id="' . esc_attr($field_id) . '" name="jpc_w_combo[' . $i . '][image]" value="' . esc_attr($image_id ?: '') . '">'
+                . '<button type="button" class="button jpc-media-select" data-target="#' . esc_attr($field_id) . '">Φωτογραφία</button> '
+                . '<button type="button" class="button jpc-media-clear" data-target="#' . esc_attr($field_id) . '"' . ($image_id ? '' : ' style="display:none;"') . '>Καθαρισμός</button> '
+                . '<button type="button" class="button-link jpc-w-combo-remove" aria-label="Διαγραφή συνδυασμού">✕</button>'
+                . '<span class="jpc-media-preview" style="display:inline-block;margin-left:8px;vertical-align:middle">' . ($preview ? '<img src="' . esc_url($preview) . '" alt="" style="max-width:40px;height:auto;border:1px solid #ddd">' : '') . '</span></p>';
+        };
+        echo '<div class="jpc-w-combo-list">';
+        $i = 0;
+        foreach ($combos as $pair => $image_id) {
+            [$men, $women] = array_pad(explode('|', (string) $pair, 2), 2, '');
+            echo $row($i++, $men, $women, (int) $image_id); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        }
+        echo '</div><p class="form-field"><button type="button" class="button" id="jpc_w_combo_add">+ Προσθήκη συνδυασμού</button></p>';
+        echo '<input type="hidden" name="jpc_w_combo[__present]" value="1">';
+        ?>
+        <script>
+        (function () {
+          var list = document.querySelector('.jpc-w-combo-list');
+          var template = <?php echo wp_json_encode($row('__i__', '', '', 0)); ?>;
+          var next = <?php echo (int) $i; ?> + 1000;
+          document.getElementById('jpc_w_combo_add').addEventListener('click', function () {
+            list.insertAdjacentHTML('beforeend', template.replace(/__i__/g, String(next++)));
+          });
+          list.addEventListener('click', function (e) {
+            if (e.target.classList.contains('jpc-w-combo-remove')) e.target.closest('.jpc-w-combo-row').remove();
+          });
+        })();
+        </script>
+        <?php
+        echo '</div>';
     }
     public static function save_product($product) {
         if (!$product || !$product->is_type('simple')) return;
@@ -207,6 +259,18 @@ final class JPC_Wedding {
         }
         $product->update_meta_data(self::PRODUCT_COLORS_KEY, $chosen);
         $product->update_meta_data(self::PRODUCT_COLOR_IMAGES_KEY, $images);
+        if (isset($_POST['jpc_w_combo']) && is_array($_POST['jpc_w_combo'])) {
+            $combos = [];
+            foreach (wp_unslash($_POST['jpc_w_combo']) as $row) {
+                if (!is_array($row)) continue;
+                $men = sanitize_key($row['men'] ?? '');
+                $women = sanitize_key($row['women'] ?? '');
+                $image_id = absint($row['image'] ?? 0);
+                // Same colour on both rings uses that colour's own photo.
+                if ($image_id && $men !== $women && in_array($men, $valid, true) && in_array($women, $valid, true)) $combos[$men . '|' . $women] = $image_id;
+            }
+            $product->update_meta_data(self::PRODUCT_COMBO_IMAGES_KEY, $combos);
+        }
     }
 
     /* ------------------------------------------------------------------
@@ -306,15 +370,15 @@ final class JPC_Wedding {
                 <span class="jcw-color-name"><?php echo $single_color ? esc_html($single_color['name']) : ''; ?></span>
               </div>
               <?php endif; ?>
-              <div class="jcw-row">
+              <div class="jcw-row jcw-size-row">
                 <label class="jcw-label" for="jcw_size_<?php echo esc_attr($ring); ?>">Νούμερο</label>
-                <select id="jcw_size_<?php echo esc_attr($ring); ?>" class="jc-control uk-select uk-form-small"><option value="">Επιλέξτε τύπο μεγέθους</option></select>
+                <select id="jcw_size_<?php echo esc_attr($ring); ?>" class="jc-control uk-select"><option value="">Επιλέξτε τύπο μεγέθους</option></select>
               </div>
               <div class="jcw-row">
                 <label class="jc-radio-option jcw-engrave-toggle"><input type="checkbox" id="jcw_engrave_<?php echo esc_attr($ring); ?>"><span>Χάραξη ονόματος<?php if ($fee > 0) echo ' <small>(+' . $price_html($fee) . ')</small>'; ?></span></label>
               </div>
               <div class="jcw-name" hidden>
-                <input type="text" id="jcw_name_<?php echo esc_attr($ring); ?>" class="jc-control uk-input uk-form-small" maxlength="<?php echo (int) $max; ?>" autocomplete="off" placeholder="Κείμενο χάραξης (π.χ. όνομα, ημερομηνία)" aria-label="Κείμενο χάραξης <?php echo esc_attr(self::RING_LABELS[$ring]); ?>"><small class="jcw-counter">0/<?php echo (int) $max; ?></small>
+                <input type="text" id="jcw_name_<?php echo esc_attr($ring); ?>" class="jc-control uk-input" maxlength="<?php echo (int) $max; ?>" autocomplete="off" placeholder="Κείμενο χάραξης (π.χ. όνομα, ημερομηνία)" aria-label="Κείμενο χάραξης <?php echo esc_attr(self::RING_LABELS[$ring]); ?>"><small class="jcw-counter">0/<?php echo (int) $max; ?></small>
               </div>
             </div>
             <?php endforeach; ?>
@@ -324,6 +388,19 @@ final class JPC_Wedding {
         <input type="hidden" name="<?php echo esc_attr($name); ?>" value="<?php echo esc_attr($value); ?>">
         <?php endforeach;
         return ob_get_clean();
+    }
+    /** Photos per men's|women's colour combination, for colours the product offers. */
+    private static function combo_image_data($product) {
+        $offered = array_column(self::product_colors($product), 'key');
+        $result = [];
+        $combos = $product->get_meta(self::PRODUCT_COMBO_IMAGES_KEY, true);
+        foreach (is_array($combos) ? $combos : [] as $pair => $image_id) {
+            [$men, $women] = array_pad(explode('|', (string) $pair, 2), 2, '');
+            if (!in_array($men, $offered, true) || !in_array($women, $offered, true)) continue;
+            $data = JPC_Product_Configurator::attachment_image_data((int) $image_id);
+            if ($data) $result[$men . '|' . $women] = $data;
+        }
+        return $result;
     }
     /** Data for wedding.js. */
     public static function script_data($product) {
@@ -343,6 +420,7 @@ final class JPC_Wedding {
             'engraveMax' => self::engrave_max(),
             'hasColors' => (bool) self::product_colors($product),
             'colorImages' => $color_images,
+            'comboImages' => self::combo_image_data($product),
             'mainImage' => JPC_Product_Configurator::attachment_image_data((int) $product->get_image_id(), true),
             'priceSelector' => '.jpc-live-price',
             'format' => [

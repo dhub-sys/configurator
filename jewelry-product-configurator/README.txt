@@ -173,3 +173,10 @@ Version 1.3.9: Wedding rings, colour per ring + compact layout
 - Compact layout: one top box (rings + prices + pair price, size system as EU/US buttons,
   material), then one box per ring with colour (small round swatches + selected name),
   size and engraving on compact rows.
+
+Version 1.4.0:
+- Wedding colour swatches are rounded squares again (38px, 10px radius, as before).
+- Ring size and engraving fields at normal size; 8px space above the size row.
+- Product > Βέρες > "Φωτογραφίες συνδυασμών": optional photo for a men's colour + women's
+  colour combination (e.g. men's Κίτρινο + women's Ροζ - Λευκό). Shown when the customer
+  picks exactly that combination; otherwise the photo of the colour chosen last.
