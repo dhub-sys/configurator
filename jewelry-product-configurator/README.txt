@@ -193,3 +193,10 @@ Version 1.4.2:
   and photos), missing ones are added, custom colours go after them.
 - Settings > Χρώματα βερών: ↑ ↓ buttons to change the order.
 - Product > Βέρες: link to the colour list (new colours and order are managed there).
+
+Version 1.4.3:
+- WooCommerce > Jewelry Configurator > "Εξαντλημένα προϊόντα" (off by default, all products):
+  a badge on out-of-stock products in WooCommerce product grids, and on the product page a
+  visible, disabled button in place of the add-to-cart button (WooCommerce otherwise shows
+  none). The text is configurable (default "Εξαντλήθηκε"). Backorders count as in stock.
+  The configurator is not shown on out-of-stock products.

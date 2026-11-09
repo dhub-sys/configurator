@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.4.2
+ * Version: 1.4.3
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.4.2';
+    const VERSION = '1.4.3';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -741,6 +741,7 @@ final class JPC_Product_Configurator {
         echo '<p class="description">Νούμερα: κενά πεδία = προεπιλογή (EU 47–58, US 5–13, ανά 1). Για μισά νούμερα βάλτε βήμα 0.5 (π.χ. US 5 – 13 ανά 0.5 → 5, 5½, 6 …).</p>';
         echo '<p class="description"><strong>Τύπος «Βέρες»:</strong> αντί για επιλογή μετάλλου, ο πελάτης διαλέγει ζευγάρι ή μεμονωμένη βέρα, χρώμα, νούμερα και χάραξη. Η στήλη «Χρώμα χρυσού» δεν ισχύει εκεί· τα νούμερα ακολουθούν τις στήλες EU/US.</p>';
         JPC_Wedding::settings_section();
+        JPC_Stock::settings_section();
         self::legacy_settings_section();
         echo '<h2>Εμφάνιση τιμών</h2><fieldset>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="'.esc_attr(self::LABEL_PRICES_OPTION).'" value="yes" '.checked(get_option(self::LABEL_PRICES_OPTION, 'yes'), 'yes', false).'> Τιμή δίπλα σε κάθε μέταλλο στη σελίδα προϊόντος (π.χ. «Πλατίνα — 1.250 €»)</label>';
@@ -979,6 +980,8 @@ final class JPC_Product_Configurator {
     }
     private static function render() {
         if (self::$rendered) return '';
+        // Nothing to configure on a product that cannot be bought (setting "Εξαντλημένα προϊόντα").
+        if (JPC_Stock::is_out_of_stock(wc_get_product(get_queried_object_id()))) return '';
         self::$rendered = true;
         if (JPC_Wedding::is_wedding(get_queried_object_id())) {
             $wedding_product = wc_get_product(get_queried_object_id());
@@ -1139,5 +1142,7 @@ final class JPC_Product_Configurator {
     }
 }
 require_once __DIR__ . '/includes/class-jpc-wedding.php';
+require_once __DIR__ . '/includes/class-jpc-stock.php';
 add_action('plugins_loaded', ['JPC_Product_Configurator','init']);
 add_action('plugins_loaded', ['JPC_Wedding','init']);
+add_action('plugins_loaded', ['JPC_Stock','init']);
