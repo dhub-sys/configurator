@@ -200,3 +200,10 @@ Version 1.4.3:
   visible, disabled button in place of the add-to-cart button (WooCommerce otherwise shows
   none). The text is configurable (default "Εξαντλήθηκε"). Backorders count as in stock.
   The configurator is not shown on out-of-stock products.
+
+Version 1.4.4:
+- Out-of-stock badge also on YOOtheme Grid elements with dynamic content (which do not run
+  WooCommerce's loop hooks): the page gets the list of out-of-stock product links (cached,
+  refreshed when stock changes) and a small script badges each grid item linking to one.
+  Menus, breadcrumbs, header/footer and links in text are skipped; items loaded later
+  (filters, load more) are handled too.

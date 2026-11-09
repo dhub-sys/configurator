@@ -19,6 +19,13 @@ final class JPC_Stock {
         add_action('woocommerce_simple_add_to_cart', [__CLASS__, 'disabled_button'], 31);
         add_action('woocommerce_variable_add_to_cart', [__CLASS__, 'disabled_button'], 31);
         add_action('wp_enqueue_scripts', [__CLASS__, 'styles'], 20);
+        // YOOtheme Grid (dynamic content) does not run WooCommerce's loop hooks: badge those
+        // items in the browser, from the list of out-of-stock product links.
+        add_action('wp_footer', [__CLASS__, 'grid_script'], 50);
+        foreach (['woocommerce_product_set_stock_status', 'woocommerce_variation_set_stock_status', 'save_post_product', 'trashed_post', 'deleted_post', 'untrashed_post'] as $hook) {
+            add_action($hook, [__CLASS__, 'flush_paths']);
+        }
+        add_action('update_option_' . self::OPTION, [__CLASS__, 'flush_paths']);
     }
 
     public static function register_settings() {
@@ -54,6 +61,7 @@ final class JPC_Stock {
     public static function styles() {
         if (!self::enabled() || !function_exists('is_woocommerce')) return;
         $css = '.woocommerce ul.products li.product,.products .product{position:relative}'
+            . '.el-item .jpc-oos-badge{font-weight:normal;text-transform:none}'
             . '.jpc-oos-badge{position:absolute;top:10px;left:10px;z-index:3;padding:4px 10px;border-radius:4px;'
             . 'background:#111;color:#fff;font-size:12px;line-height:1.4;letter-spacing:.02em;pointer-events:none}'
             . '.jpc-oos-cart{margin:10px 0}'
@@ -63,11 +71,84 @@ final class JPC_Stock {
         wp_add_inline_style('jpc-stock', $css);
     }
 
+    const PATHS_TRANSIENT = 'jpc_oos_paths';
+    const MAX_PATHS = 3000;
+    public static function flush_paths() {
+        delete_transient(self::PATHS_TRANSIENT);
+    }
+    /** Site-relative links of all published out-of-stock products (cached until stock changes). */
+    public static function out_of_stock_paths() {
+        $paths = get_transient(self::PATHS_TRANSIENT);
+        if (is_array($paths)) return $paths;
+        $paths = [];
+        if (function_exists('wc_get_products')) {
+            $ids = wc_get_products(['status' => 'publish', 'stock_status' => 'outofstock', 'limit' => self::MAX_PATHS, 'return' => 'ids']);
+            foreach ($ids as $id) {
+                $link = get_permalink($id);
+                if ($link) $paths[] = wp_make_link_relative($link);
+            }
+        }
+        set_transient(self::PATHS_TRANSIENT, $paths, 12 * HOUR_IN_SECONDS);
+        return $paths;
+    }
+    public static function grid_script() {
+        if (!self::enabled() || is_admin()) return;
+        $paths = self::out_of_stock_paths();
+        if (!$paths) return;
+        $data = ['paths' => array_values($paths), 'label' => self::label()];
+        ?>
+<script id="jpc-oos-grid">
+(function () {
+  'use strict';
+  var data = <?php echo wp_json_encode($data); ?>;
+  function norm(href) {
+    try {
+      var url = new URL(href, window.location.href);
+      if (url.host !== window.location.host) return '';
+      return decodeURIComponent(url.pathname).replace(/\/+$/, '').toLowerCase();
+    } catch (e) { return ''; }
+  }
+  var outOfStock = {};
+  data.paths.forEach(function (path) { var key = norm(path); if (key) outOfStock[key] = true; });
+  // Product boxes only: never menus, breadcrumbs, header/footer or links inside page text.
+  var SKIP = 'header, footer, nav, .tm-header, .tm-footer, .tm-toolbar, .uk-navbar-container, .woocommerce-breadcrumb, .uk-breadcrumb, .jewelry-configurator, .jpc-wedding';
+  var ITEM = '.el-item, li.product, .uk-card';
+  function badge(item) {
+    if (item.querySelector('.jpc-oos-badge')) return;
+    var img = item.querySelector('img');
+    var host = img ? img.parentElement : item;
+    if (host && host.tagName === 'PICTURE') host = host.parentElement;
+    if (!host || !item.contains(host)) host = item;
+    if (window.getComputedStyle(host).position === 'static') host.style.position = 'relative';
+    var el = document.createElement('span');
+    el.className = 'jpc-oos-badge';
+    el.textContent = data.label;
+    host.insertBefore(el, host.firstChild);
+  }
+  function run() {
+    document.querySelectorAll('a[href]').forEach(function (a) {
+      if (!outOfStock[norm(a.getAttribute('href'))] || a.closest(SKIP)) return;
+      var item = a.closest(ITEM);
+      if (item) badge(item);
+    });
+  }
+  run();
+  // Grids filtered or loaded later (UIkit filter, "load more", AJAX).
+  var timer = null;
+  if (window.MutationObserver) {
+    new MutationObserver(function () { clearTimeout(timer); timer = setTimeout(run, 150); })
+      .observe(document.body, {childList: true, subtree: true});
+  }
+})();
+</script>
+        <?php
+    }
+
     /** Section inside the plugin's settings form. */
     public static function settings_section() {
         echo '<h2>Εξαντλημένα προϊόντα</h2><fieldset>';
         echo '<label style="display:block;margin:8px 0"><input type="checkbox" name="' . esc_attr(self::OPTION) . '" value="yes" ' . checked(self::enabled(), true, false) . '> '
-            . 'Badge στα εξαντλημένα προϊόντα στη λίστα/grid, και ανενεργό κουμπί στη σελίδα προϊόντος αντί για «Προσθήκη στο καλάθι»</label>';
+            . 'Badge στα εξαντλημένα προϊόντα στη λίστα/grid (και στο Grid του YOOtheme), και ανενεργό κουμπί στη σελίδα προϊόντος αντί για «Προσθήκη στο καλάθι»</label>';
         echo '<label style="display:block;margin:8px 0">Κείμενο: <input type="text" class="regular-text" name="' . esc_attr(self::LABEL_OPTION) . '" value="' . esc_attr(self::label()) . '"></label>';
         echo '<p class="description">Ισχύει για όλα τα προϊόντα με απόθεμα «Εξαντλημένο» (όχι για «Σε προπαραγγελία»). Σε εξαντλημένο προϊόν δεν εμφανίζεται ο configurator, αφού δεν αγοράζεται.</p>';
         echo '</fieldset>';
