@@ -421,3 +421,16 @@
 .jpc-wedding[data-jc-wedding="1"] .jcw-pair-note strong {
   font-weight: 700;
 }
+/* "Ανδρική: 380,00 €" written like "Ζευγάρι: 680,00 €" (colon in the markup, no dash) */
+.jpc-wedding[data-jc-wedding="1"] .jcw-choices .jcw-ring-name {
+  font-size: 0.9em;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-choices .jc-radio-option {
+  gap: 6px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-choices .jcw-ring-name + .jc-metal-price {
+  margin-left: -2px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-choices .jc-metal-price::before {
+  content: none !important;
+}

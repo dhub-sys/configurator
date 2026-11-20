@@ -254,3 +254,7 @@ Version 1.5.0:
 Version 1.5.1:
 - Wedding rings: the men's / women's prices next to the ticks use the same font as the pair
   price (same size and colour, amount in bold). "μόνο σε ζευγάρι" stays plain text.
+
+Version 1.5.2:
+- Wedding rings: "Ανδρική: 380,00 €" / "Γυναικεία: 300,00 €" written exactly like
+  "Ζευγάρι: 680,00 €" (same size, colon instead of the dash, amount in bold).

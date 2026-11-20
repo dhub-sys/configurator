@@ -475,7 +475,7 @@ final class JPC_Wedding {
                   <?php foreach (['men' => 'Ανδρική', 'women' => 'Γυναικεία'] as $ring => $label) :
                     $alone = isset($prices[$ring]);
                     if (!$alone && !isset($prices['pair']) && !isset($other_prices[$ring]) && !isset($other_prices['pair'])) continue; ?>
-                    <label class="jc-radio-option"><input type="checkbox" name="jcw_ring_ui" value="<?php echo esc_attr($ring); ?>"<?php checked(in_array($ring, $default, true)); ?>><span><?php echo esc_html($label); ?></span><span class="jc-metal-price"><?php echo $alone ? $price_html($prices[$ring]) : 'μόνο σε ζευγάρι'; ?></span></label>
+                    <label class="jc-radio-option"><input type="checkbox" name="jcw_ring_ui" value="<?php echo esc_attr($ring); ?>"<?php checked(in_array($ring, $default, true)); ?>><span class="jcw-ring-name"><?php echo esc_html($label); ?>:</span><span class="jc-metal-price"><?php echo $alone ? $price_html($prices[$ring]) : 'μόνο σε ζευγάρι'; ?></span></label>
                   <?php endforeach; ?>
                   <?php if (isset($prices['pair'])) : ?><span class="jcw-pair-note">Ζευγάρι: <strong><?php echo $price_html($prices['pair']); ?></strong></span><?php endif; ?>
                 </div>
