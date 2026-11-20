@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.4.4
+ * Version: 1.4.5
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.4.4';
+    const VERSION = '1.4.5';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -325,6 +325,8 @@ final class JPC_Product_Configurator {
         return [
             'id' => $attachment_id,
             'src' => $full[0],
+            'width' => (int) $full[1],
+            'height' => (int) $full[2],
             'srcset' => wp_get_attachment_image_srcset($attachment_id, 'full') ?: '',
             'sizes' => wp_get_attachment_image_sizes($attachment_id, 'full') ?: '',
             'thumb' => wp_get_attachment_image_url($attachment_id, 'woocommerce_thumbnail') ?: $full[0],

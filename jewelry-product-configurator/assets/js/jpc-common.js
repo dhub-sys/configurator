@@ -126,6 +126,14 @@ window.JPCCommon = (function ($) {
     const width = img.getBoundingClientRect().width;
     return width > 0 && width < 160;
   }
+  /**
+   * The hover-zoom copy (jQuery Zoom's .zoomImg) and lightbox images belong to those
+   * scripts: they are rebuilt from the main image, never edited here. Editing the zoom
+   * copy (srcset/sizes) shrank it to the frame's size, so there was nothing to zoom into.
+   */
+  function isZoomOrLightbox(img) {
+    return img.classList.contains('zoomImg') || !!img.closest('.pswp, .uk-lightbox');
+  }
   function galleryImages() {
     const selectors = [
       '.woocommerce-product-gallery img',
@@ -133,7 +141,7 @@ window.JPCCommon = (function ($) {
       '.woocommerce div.product div.images img'
     ];
     return $(selectors.join(',')).filter(function () {
-      return !$(this).closest('.jewelry-configurator, .jpc-wedding').length && !$(this).closest('.woocommerce-product-gallery__trigger').length;
+      return !$(this).closest('.jewelry-configurator, .jpc-wedding').length && !$(this).closest('.woocommerce-product-gallery__trigger').length && !isZoomOrLightbox(this);
     }).get();
   }
   /** Images showing the main product photo. Fallback: the first slide and the first thumbnail. */
@@ -145,6 +153,7 @@ window.JPCCommon = (function ($) {
   function pageImagesOfMainPhoto() {
     if (!mainStems.size) return [];
     return Array.prototype.filter.call(document.querySelectorAll('img'), function (img) {
+      if (isZoomOrLightbox(img)) return false;
       if (img.closest('.jewelry-configurator, .jpc-wedding, .related, .upsells, .cross-sells, header, footer, nav, .tm-header, .tm-footer, .uk-navbar-container, .woocommerce-product-gallery__trigger')) return false;
       return isMainProductImage(img);
     });
@@ -200,6 +209,13 @@ window.JPCCommon = (function ($) {
     if (img.hasAttribute('data-srcset')) setAttr(img, 'data-srcset', srcset);
     if (imageData.alt) img.setAttribute('alt', imageData.alt);
     img.setAttribute('data-large_image', imageData.src);
+    // Real size of the new photo: WooCommerce enables hover zoom only when it is larger than
+    // the gallery, and its lightbox uses it. jQuery caches data-*, so update both.
+    if (imageData.width && imageData.height && img.hasAttribute('data-large_image_width')) {
+      img.setAttribute('data-large_image_width', imageData.width);
+      img.setAttribute('data-large_image_height', imageData.height);
+      $(img).data('large_image_width', Number(imageData.width)).data('large_image_height', Number(imageData.height));
+    }
     if (imageData.caption) img.setAttribute('data-caption', imageData.caption);
     if (imageData.thumb && img.hasAttribute('data-thumb')) img.setAttribute('data-thumb', imageData.thumb);
     if (state.anchor) {
@@ -212,6 +228,9 @@ window.JPCCommon = (function ($) {
     const state = imageStates.get(img);
     if (!state) return;
     imageAttrs.forEach(function (name) { setAttr(img, name, state.attrs[name]); });
+    if (state.attrs['data-large_image_width']) {
+      $(img).data('large_image_width', Number(state.attrs['data-large_image_width'])).data('large_image_height', Number(state.attrs['data-large_image_height']));
+    }
     if (state.anchor) {
       setAttr(state.anchor.node, 'href', state.anchor.href);
       setAttr(state.anchor.node, 'data-srcset', state.anchor.srcset);
@@ -251,12 +270,15 @@ window.JPCCommon = (function ($) {
     swappedNodes.slice().forEach(restoreImageNode);
     refreshGallery();
   }
+  /**
+   * Ask WooCommerce to rebuild hover zoom from the (new) main image. The event must go to
+   * the .woocommerce-product-gallery element itself: WooCommerce listens there, and events
+   * bubble up, not down, so sending it to YOOtheme's wrapper never reached it.
+   */
   function refreshGallery() {
-    const $mainWrap = $('.woocommerce-product-gallery, .tm-element-woo-images').first();
-    if ($mainWrap.length) {
-      $mainWrap.trigger('wc-product-gallery-after-init');
-      $mainWrap.trigger('woocommerce_gallery_init_zoom');
-    }
+    $('.woocommerce-product-gallery').each(function () {
+      $(this).trigger('woocommerce_gallery_init_zoom');
+    });
   }
 
   return {

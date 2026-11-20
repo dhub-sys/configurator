@@ -207,3 +207,11 @@ Version 1.4.4:
   refreshed when stock changes) and a small script badges each grid item linking to one.
   Menus, breadcrumbs, header/footer and links in text are skipped; items loaded later
   (filters, load more) are handled too.
+
+Version 1.4.5:
+- Fix: after a colour / Yellow Gold photo swap, WooCommerce's hover zoom stopped working.
+  The zoom copy of the image (.zoomImg) was edited like a normal image and shrank to the
+  frame size; zoom was never rebuilt (the event went to YOOtheme's wrapper instead of the
+  .woocommerce-product-gallery element); and the new photo's real size was not passed on.
+  Zoom and lightbox images are now left to their scripts, zoom is rebuilt from the new photo,
+  and data-large_image_width/height are updated (and restored).
