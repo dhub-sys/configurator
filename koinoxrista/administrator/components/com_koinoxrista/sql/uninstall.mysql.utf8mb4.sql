@@ -1,0 +1,15 @@
+DROP TABLE IF EXISTS `#__kx_account_users`;
+DROP TABLE IF EXISTS `#__kx_accounts`;
+DROP TABLE IF EXISTS `#__kx_billing`;
+DROP TABLE IF EXISTS `#__kx_buildings`;
+DROP TABLE IF EXISTS `#__kx_charges`;
+DROP TABLE IF EXISTS `#__kx_expenses`;
+DROP TABLE IF EXISTS `#__kx_keys`;
+DROP TABLE IF EXISTS `#__kx_log`;
+DROP TABLE IF EXISTS `#__kx_packages`;
+DROP TABLE IF EXISTS `#__kx_payments`;
+DROP TABLE IF EXISTS `#__kx_periods`;
+DROP TABLE IF EXISTS `#__kx_readings`;
+DROP TABLE IF EXISTS `#__kx_templates`;
+DROP TABLE IF EXISTS `#__kx_unit_mills`;
+DROP TABLE IF EXISTS `#__kx_units`;

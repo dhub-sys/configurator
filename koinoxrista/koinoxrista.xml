@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<extension type="component" method="upgrade">
+    <name>com_koinoxrista</name>
+    <element>com_koinoxrista</element>
+    <version>1.0.0</version>
+    <creationDate>2026-11-20</creationDate>
+    <author>White Label Joomla Component</author>
+    <license>GPL-2.0-or-later</license>
+    <description>SaaS έκδοσης κοινοχρήστων πολυκατοικιών: κτίρια, ιδιοκτησίες, χιλιοστά, θέρμανση, εισπράξεις, εκτύπωση σε προτυπωμένα έντυπα A4 και πακέτα συνδρομής.</description>
+    <namespace path="src">Koinoxrista\Component\Koinoxrista</namespace>
+    <scriptfile>script.php</scriptfile>
+
+    <files folder="components/com_koinoxrista">
+        <folder>src</folder>
+        <folder>tmpl</folder>
+    </files>
+
+    <media destination="com_koinoxrista" folder="media">
+        <folder>css</folder>
+        <folder>js</folder>
+        <folder>images</folder>
+    </media>
+
+    <administration>
+        <files folder="administrator/components/com_koinoxrista">
+            <folder>services</folder>
+            <folder>src</folder>
+            <folder>sql</folder>
+            <filename>config.xml</filename>
+        </files>
+        <menu link="option=com_koinoxrista">Κοινόχρηστα</menu>
+    </administration>
+
+    <install>
+        <sql>
+            <file driver="mysql" charset="utf8">sql/install.mysql.utf8mb4.sql</file>
+        </sql>
+    </install>
+    <uninstall>
+        <sql>
+            <file driver="mysql" charset="utf8">sql/uninstall.mysql.utf8mb4.sql</file>
+        </sql>
+    </uninstall>
+    <update>
+        <schemas>
+            <schemapath type="mysql">sql/updates/mysql</schemapath>
+        </schemas>
+    </update>
+</extension>

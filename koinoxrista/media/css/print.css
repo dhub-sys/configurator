@@ -1,0 +1,27 @@
+/* Σελίδες A4 εκτύπωσης. Όλες οι θέσεις είναι σε mm, ώστε η εκτύπωση να ταιριάζει στα προτυπωμένα έντυπα. */
+.kx-pages{padding:24px 0 60px;display:flex;flex-direction:column;align-items:center;gap:24px}
+.kx-page{position:relative;overflow:hidden;background:#fff;color:#000;box-shadow:0 8px 30px rgba(15,23,42,.18);-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-after:always;break-after:page;box-sizing:border-box}
+.kx-page:last-child{page-break-after:auto;break-after:auto}
+.kx-page *{box-sizing:border-box}
+.kx-el{position:absolute;white-space:nowrap;overflow:hidden;line-height:1.2;margin:0;padding:0}
+.kx-el.kx-wrap{white-space:normal;overflow:hidden;word-break:break-word}
+.kx-cell{padding:0 .8mm;text-overflow:clip}
+.kx-head{display:flex;align-items:center;white-space:normal;padding:0 .8mm}
+.kx-head[style*="text-align:right"]{justify-content:flex-end;text-align:right}
+.kx-head[style*="text-align:center"]{justify-content:center}
+.kx-img{object-fit:contain;object-position:left center}
+.kx-page-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none}
+.kx-draft-mark{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-32deg);font:700 64pt Arial,sans-serif;color:rgba(220,38,38,.12);letter-spacing:6mm;pointer-events:none;white-space:nowrap;z-index:5}
+.kx-grid{position:absolute;inset:0;pointer-events:none;z-index:4}
+.kx-grid i{position:absolute;display:block}
+.kx-grid i.v{top:0;bottom:0;border-left:.1mm solid rgba(37,99,235,.35)}
+.kx-grid i.h{left:0;right:0;border-top:.1mm solid rgba(37,99,235,.35)}
+.kx-grid b{position:absolute;font:600 5.5pt Arial,sans-serif;color:#2563eb}
+.kx-grid em{position:absolute;width:10mm;height:10mm;margin:-5mm 0 0 -5mm;border:0;background:linear-gradient(#dc2626,#dc2626) center/100% .25mm no-repeat,linear-gradient(#dc2626,#dc2626) center/.25mm 100% no-repeat}
+@media print{
+  html,body{margin:0!important;padding:0!important;background:#fff!important}
+  .kx-noprint,.kx-printbar{display:none!important}
+  .kx-pages{padding:0!important;gap:0!important;display:block!important}
+  .kx-page{box-shadow:none!important;margin:0!important}
+  .kx-page-bg.kx-screen-only{display:none!important}
+}

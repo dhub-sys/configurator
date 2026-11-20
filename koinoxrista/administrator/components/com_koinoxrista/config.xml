@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <fieldset name="component" label="Κοινόχρηστα">
+        <field name="itemid" type="number" default="0" label="Menu Item ID (προαιρετικό)" description="Οι ρυθμίσεις της πλατφόρμας γίνονται μέσα από την εφαρμογή: Πλατφόρμα → Ρυθμίσεις." />
+    </fieldset>
+</config>
