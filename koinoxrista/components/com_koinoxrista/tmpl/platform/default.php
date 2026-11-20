@@ -35,6 +35,7 @@ echo Ui::open('platform', 'Πλατφόρμα', '', 'Διαχείριση συν
 <?php if ($tab === 'overview'):
     $active = $trial = $expired = 0; $mrr = 0.0; $soon = [];
     foreach ($accounts as $a) {
+        if (Auth::isInternal($a)) continue;
         $st = Auth::state($a);
         if ($st['code'] === 'active') { $active++; $mrr += $a->billing_cycle === 'year' ? (float) $a->price_year / 12 : (float) $a->price_month; }
         elseif ($st['code'] === 'trial') $trial++;
@@ -48,7 +49,7 @@ echo Ui::open('platform', 'Πλατφόρμα', '', 'Διαχείριση συν
   <div class="kx-kpi"><span>Ενεργοί συνδρομητές</span><strong><?= $active ?></strong><small><?= $trial ?> σε δοκιμή · <?= $expired ?> ληγμένοι</small></div>
   <div class="kx-kpi"><span>Μηνιαία έσοδα (MRR)</span><strong><?= Fmt::money($mrr) ?> €</strong><small>προ ΦΠΑ</small></div>
   <div class="kx-kpi"><span>Εισπράξεις <?= date('Y') ?></span><strong><?= Fmt::money($revenue) ?> €</strong></div>
-  <div class="kx-kpi"><span>Κτίρια στην πλατφόρμα</span><strong><?= array_sum(array_map(static fn($a) => (int) $a->buildings, $accounts)) ?></strong><small><?= array_sum(array_map(static fn($a) => (int) $a->units, $accounts)) ?> ιδιοκτησίες</small></div>
+  <div class="kx-kpi"><span>Κτίρια στην πλατφόρμα</span><strong><?= array_sum(array_map(static fn($a) => (int) $a->buildings, array_filter($accounts, static fn($a) => !Auth::isInternal($a)))) ?></strong><small><?= array_sum(array_map(static fn($a) => (int) $a->units, array_filter($accounts, static fn($a) => !Auth::isInternal($a)))) ?> ιδιοκτησίες</small></div>
 </section>
 <div class="kx-cols">
   <section class="kx-card kx-col-main">
@@ -75,7 +76,7 @@ echo Ui::open('platform', 'Πλατφόρμα', '', 'Διαχείριση συν
     <div class="kx-table-wrap"><table class="kx-table">
       <thead><tr><th>Συνδρομητής</th><th>Πακέτο</th><th>Κατάσταση</th><th class="kx-num">Κτίρια</th><th class="kx-num">Ιδιοκτ.</th><th>Εγγραφή</th><th></th></tr></thead><tbody>
       <?php foreach ($accounts as $a): ?>
-        <tr><td><a class="kx-strong" href="<?= Url::e('view=platform&tab=account&id=' . (int) $a->id) ?>"><?= Fmt::e($a->name) ?></a><div class="kx-muted"><?= Fmt::e($a->owner_email) ?></div></td>
+        <tr><td><a class="kx-strong" href="<?= Url::e('view=platform&tab=account&id=' . (int) $a->id) ?>"><?= Fmt::e($a->name) ?></a><?= Auth::isInternal($a) ? ' ' . Ui::badge('Δικός μου', 'info') : '' ?><div class="kx-muted"><?= Fmt::e($a->owner_email) ?></div></td>
           <td><?= Fmt::e($a->package) ?></td><td><?= $stateBadge($a) ?></td><td class="kx-num"><?= (int) $a->buildings ?></td><td class="kx-num"><?= (int) $a->units ?></td>
           <td><?= Fmt::date(substr((string) $a->created, 0, 10)) ?></td>
           <td class="kx-right"><?= Ui::postButton('platform.enter', ['id' => $a->id], 'Είσοδος', 'small') ?></td></tr>

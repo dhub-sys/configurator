@@ -2,7 +2,7 @@
 <extension type="component" method="upgrade">
     <name>com_koinoxrista</name>
     <element>com_koinoxrista</element>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <creationDate>2026-11-20</creationDate>
     <author>White Label Joomla Component</author>
     <license>GPL-2.0-or-later</license>

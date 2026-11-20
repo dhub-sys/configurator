@@ -31,7 +31,7 @@ final class Ui
     public static function assets(): string
     {
         $base = rtrim(Uri::root(true), '/') . '/media/com_koinoxrista/';
-        $v = '1.0.0';
+        $v = '1.0.1';
         return '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geom:wght@300..900&display=swap">'
             . '<link rel="stylesheet" href="' . $base . 'css/app.css?v=' . $v . '">'
             . '<script src="' . $base . 'js/app.js?v=' . $v . '" defer></script>'

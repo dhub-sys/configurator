@@ -65,8 +65,8 @@ Factory::getApplication()->getDocument()->setTitle($title);
 $media = rtrim(Uri::root(true), '/') . '/media/com_koinoxrista/';
 $templates = Repo::templates($type);
 ?>
-<link rel="stylesheet" href="<?= $media ?>css/app.css?v=1.0.0">
-<link rel="stylesheet" href="<?= $media ?>css/print.css?v=1.0.0">
+<link rel="stylesheet" href="<?= $media ?>css/app.css?v=1.0.1">
+<link rel="stylesheet" href="<?= $media ?>css/print.css?v=1.0.1">
 <div class="kx-printbar kx-noprint">
   <a class="kx-btn kx-btn-small" href="<?= Fmt::e($back) ?>">← Πίσω</a>
   <strong class="kx-printbar-title"><?= Fmt::e($title) ?></strong>

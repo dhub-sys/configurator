@@ -87,7 +87,38 @@ final class Auth
     {
         $uid = self::userId();
         if (!$uid) return null;
-        return self::$cache['member'] ??= Db::one('SELECT * FROM #__kx_account_users WHERE user_id=' . $uid);
+        if (!isset(self::$cache['member'])) {
+            self::$cache['member'] = Db::one('SELECT * FROM #__kx_account_users WHERE user_id=' . $uid);
+            if (!self::$cache['member'] && self::isPlatformAdmin($uid)) {
+                self::$cache['member'] = self::provisionAdminAccount($uid);
+            }
+        }
+        return self::$cache['member'];
+    }
+
+    /**
+     * Ο διαχειριστής πλατφόρμας αποκτά αυτόματα δικό του λογαριασμό διαχείρισης, ώστε να
+     * χρησιμοποιεί και ο ίδιος την εφαρμογή (κτίρια, μήνες, εκτυπώσεις). Είναι «εσωτερικός»:
+     * χωρίς λήξη, με το πακέτο με τις περισσότερες δυνατότητες, και δεν μετράει στα έσοδα.
+     */
+    private static function provisionAdminAccount(int $uid): ?object
+    {
+        $pkg = Db::one('SELECT * FROM #__kx_packages ORDER BY (max_buildings=0) DESC, (max_units=0) DESC, LENGTH(features) DESC, price_month DESC, id LIMIT 1');
+        $user = Db::one('SELECT name, email FROM #__users WHERE id=' . $uid);
+        $site = trim((string) Factory::getApplication()->get('sitename', ''));
+        $aid = Db::insert('#__kx_accounts', [
+            'name' => $site !== '' ? $site : (string) ($user->name ?? 'Ο λογαριασμός μου'), 'email' => (string) ($user->email ?? ''),
+            'package_id' => (int) ($pkg->id ?? 0), 'billing_cycle' => 'month', 'status' => 'active', 'trial_ends' => null, 'paid_until' => null,
+            'settings' => json_encode(['internal' => 1]), 'notes' => 'Λογαριασμός διαχειριστή πλατφόρμας', 'created' => Db::now(), 'modified' => Db::now(),
+        ]);
+        Db::insert('#__kx_account_users', ['account_id' => $aid, 'user_id' => $uid, 'role' => 'owner', 'created' => Db::now()]);
+        return Db::one('SELECT * FROM #__kx_account_users WHERE user_id=' . $uid);
+    }
+
+    /** Εσωτερικός λογαριασμός (του διαχειριστή πλατφόρμας): εκτός στατιστικών εσόδων. */
+    public static function isInternal(object $account): bool
+    {
+        return !empty((json_decode((string) ($account->settings ?? ''), true) ?: [])['internal']);
     }
 
     public static function accountId(): int

@@ -34,8 +34,8 @@ $layout['per_page'] = 1;
 Factory::getApplication()->getDocument()->setTitle('Ειδοποιητήριο ' . ($ctx['fields']['period.title'] ?? '') . ' - ' . ($ctx['units'][0]['unit.code'] ?? ''));
 $media = rtrim(Uri::root(true), '/') . '/media/com_koinoxrista/';
 ?>
-<link rel="stylesheet" href="<?= $media ?>css/app.css?v=1.0.0">
-<link rel="stylesheet" href="<?= $media ?>css/print.css?v=1.0.0">
+<link rel="stylesheet" href="<?= $media ?>css/app.css?v=1.0.1">
+<link rel="stylesheet" href="<?= $media ?>css/print.css?v=1.0.1">
 <div class="kx-printbar kx-noprint">
   <strong class="kx-printbar-title"><?= Fmt::e($b->title) ?> · <?= Fmt::e($ctx['units'][0]['unit.code'] ?? '') ?> · <?= Fmt::e($ctx['fields']['period.title'] ?? '') ?></strong>
   <span class="kx-printbar-total">Πληρωτέο: <strong><?= Fmt::e($ctx['units'][0]['amt.total'] ?? '') ?> €</strong></span>

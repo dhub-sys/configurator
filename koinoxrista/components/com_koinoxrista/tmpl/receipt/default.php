@@ -32,8 +32,8 @@ $copy = static function (string $label) use ($account, $b, $u, $pay, $footer, $l
         . ($footer !== '' ? '<p class="kx-receipt-foot">' . nl2br(Fmt::e($footer)) . '</p>' : '') . '</div>';
 };
 ?>
-<link rel="stylesheet" href="<?= $media ?>css/app.css?v=1.0.0">
-<link rel="stylesheet" href="<?= $media ?>css/print.css?v=1.0.0">
+<link rel="stylesheet" href="<?= $media ?>css/app.css?v=1.0.1">
+<link rel="stylesheet" href="<?= $media ?>css/print.css?v=1.0.1">
 <div class="kx-printbar kx-noprint">
   <a class="kx-btn kx-btn-small" href="<?= Url::e('view=payments&building_id=' . (int) $b->id . '&unit_id=' . (int) $u->id) ?>">← Πίσω</a>
   <strong class="kx-printbar-title">Απόδειξη <?= (int) $pay->receipt_no ?></strong>

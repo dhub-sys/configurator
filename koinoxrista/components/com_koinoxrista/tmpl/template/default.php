@@ -41,7 +41,7 @@ $actions = Ui::btn('Δοκιμαστική εκτύπωση', Url::to('view=prin
     . ($editable ? '' : Ui::postButton('template.copy', ['id' => $t->id], 'Δημιουργία αντιγράφου για επεξεργασία', 'primary'));
 echo Ui::open('templates', $t->title, $actions, Fmt::e(Layouts::TYPES[$t->type] ?? '') . ($own ? '' : ' · πρότυπο συστήματος' . ($editable ? ' (επεξεργασία ως διαχειριστής πλατφόρμας)' : ' · μόνο προβολή')));
 ?>
-<link rel="stylesheet" href="<?= $media ?>css/print.css?v=1.0.0">
+<link rel="stylesheet" href="<?= $media ?>css/print.css?v=1.0.1">
 <script type="application/json" id="kx-designer-data"><?= json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 <?= Ui::form('template.save', 'id="kx-designer-form" class="kx-designer-form"', true) ?>
   <input type="hidden" name="id" value="<?= (int) $t->id ?>">
@@ -93,5 +93,5 @@ echo Ui::open('templates', $t->title, $actions, Fmt::e(Layouts::TYPES[$t->type] 
     <div data-props><p class="kx-muted">Επιλέξτε ένα στοιχείο στη σελίδα. Μετακίνηση με σύρσιμο ή με τα βελάκια (Shift = 5 mm, Alt = 0,1 mm). Αλλαγή πλάτους από τη δεξιά λαβή.</p></div>
   </aside>
 </div>
-<script src="<?= $media ?>js/designer.js?v=1.0.0" defer></script>
+<script src="<?= $media ?>js/designer.js?v=1.0.1" defer></script>
 <?php echo Ui::close();
