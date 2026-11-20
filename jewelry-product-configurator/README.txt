@@ -265,3 +265,13 @@ Version 1.5.3:
   be sent, otherwise marks and scrolls to the missing field and returns false.
   Used by snippets/aad-sticky-add-to-cart.php (Code Snippets), which sends all configurator
   choices with its AJAX add-to-cart and mirrors the live configured price.
+
+Version 1.5.4:
+- window.JPCConfigurator = {isComplete(), reveal(), validate()} and a "jpc:change" event on
+  document after every change, for other scripts such as the sticky add-to-cart bar:
+  isComplete() checks without marking anything, reveal() smooth-scrolls to the first missing
+  field (no red borders).
+- Fix: wedding ring size changes were only copied into the cart form when adding to cart
+  (the listener still pointed at the pre-1.3.9 markup).
+- snippets/aad-sticky-add-to-cart.php: "Επιλογή χαρακτηριστικών" until all choices are made,
+  then "Προσθήκη στο καλάθι"; content centred.

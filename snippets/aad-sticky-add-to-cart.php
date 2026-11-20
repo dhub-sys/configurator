@@ -6,8 +6,10 @@
  * - Προϊόν με παραλλαγές: επιπλέον μικρό dropdown με τις παραλλαγές (με τιμή δίπλα).
  * - Προϊόντα με τον Jewelry Configurator (μονόπετρα, βέρες κ.λπ.):
  *     · η τιμή της μπάρας ακολουθεί τη ζωντανή τιμή της σελίδας (μέταλλο, καράτια, χάραξη…),
- *     · το κουμπί ελέγχει πρώτα τις επιλογές· αν λείπει κάτι, πηγαίνει στο πεδίο που λείπει,
- *     · αλλιώς στέλνει στο καλάθι ΟΛΕΣ τις επιλογές (χρειάζεται Jewelry Configurator 1.5.3+).
+ *     · όσο λείπουν επιλογές το κουμπί γράφει «Επιλογή χαρακτηριστικών» και πατώντας το η
+ *       σελίδα κάνει ομαλό scroll στο πρώτο πεδίο που λείπει (χωρίς κόκκινα περιγράμματα),
+ *     · όταν συμπληρωθούν όλα γράφει «Προσθήκη στο καλάθι» και στέλνει ΟΛΕΣ τις επιλογές
+ *       (χρειάζεται Jewelry Configurator 1.5.4+).
  * - Η προσθήκη στο καλάθι γίνεται με AJAX: η σελίδα δεν ξαναφορτώνει, δεν πηγαίνει πάνω και
  *   δεν βγαίνει notification. Το mini-cart ενημερώνεται.
  * - Όλα τα κείμενα είναι οι προεπιλεγμένες φράσεις του WooCommerce.
@@ -133,12 +135,14 @@ function aad_sticky_price_bar() {
 		.aad-sticky-bar.is-visible { transform: translateY(0); }
 
 		/* Φωτογραφία | τίτλος + τιμή | (dropdown) κουμπί — όλα στο ίδιο κέντρο ύψους */
+		/* Όλα μαζεμένα στο κέντρο: φωτογραφία, τίτλος + τιμή, (dropdown) κουμπί */
 		.aad-sticky-inner {
 			max-width: 1200px;
 			margin: 0 auto;
 			display: flex;
 			align-items: center;
-			gap: 16px;
+			justify-content: center;
+			gap: 14px;
 		}
 		.aad-sticky-thumb { flex: 0 0 auto; line-height: 0; }
 		.aad-sticky-thumb img {
@@ -153,8 +157,9 @@ function aad_sticky_price_bar() {
 			box-sizing: border-box;
 		}
 		.aad-sticky-info {
-			flex: 1 1 auto;
+			flex: 0 1 auto;
 			min-width: 0;
+			max-width: 420px;
 			display: flex;
 			flex-direction: column;
 			justify-content: center;
@@ -181,6 +186,7 @@ function aad_sticky_price_bar() {
 			display: flex;
 			align-items: center;
 			gap: 10px;
+			margin-left: 10px;
 		}
 
 		/* !important γιατί τα θέματα συνήθως δίνουν width:100% / ύψος / φόντο σε όλα τα select */
@@ -237,11 +243,12 @@ function aad_sticky_price_bar() {
 		@media (max-width: 640px) {
 			.aad-sticky-bar { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
 			.aad-sticky-inner { flex-wrap: wrap; gap: 10px; }
+			.aad-sticky-actions { margin-left: 0; }
 			.aad-sticky-thumb img { width: 44px; height: 44px; }
 			.aad-sticky-title,
 			.aad-sticky-price { font-size: 13px; }
 			.aad-sticky-btn { min-width: 0; padding: 0 14px; font-size: 13px; }
-			.aad-sticky-bar.is-variable .aad-sticky-actions { flex: 1 1 100%; }
+			.aad-sticky-bar.is-variable .aad-sticky-actions { flex: 1 1 100%; justify-content: center; }
 			.aad-sticky-bar.is-variable .aad-sticky-select {
 				flex: 1 1 auto !important;
 				max-width: none !important;
@@ -265,6 +272,7 @@ function aad_sticky_price_bar() {
 
 		var btn = bar.querySelector('.aad-sticky-btn');
 		var btnLabel = btn.textContent.trim();
+		var chooseLabel = 'Επιλογή χαρακτηριστικών';
 		var select = bar.querySelector('.aad-sticky-select');
 		var priceEl = bar.querySelector('.aad-sticky-price');
 		var thumbImg = bar.querySelector('.aad-sticky-thumb img');
@@ -273,6 +281,23 @@ function aad_sticky_price_bar() {
 		// Προϊόν με τον Jewelry Configurator (μονόπετρα, βέρες κ.λπ.)
 		var hasConfigurator = !!document.querySelector('.jewelry-configurator, .jpc-wedding') ||
 			!!(mainForm && mainForm.querySelector('[name="jc_configurator_enabled"], [name="jcw_enabled"]'));
+
+		// Configurator: «Επιλογή χαρακτηριστικών» όσο λείπουν επιλογές, «Προσθήκη στο καλάθι» όταν
+		// συμπληρωθούν όλες. Το plugin ειδοποιεί με το event jpc:change σε κάθε αλλαγή.
+		var buyable = btn.getAttribute('data-action') !== 'none';
+		function isComplete() {
+			return !hasConfigurator || !!(window.JPCConfigurator && window.JPCConfigurator.isComplete());
+		}
+		function updateLabel() {
+			if (!buyable || btn.classList.contains('is-loading') || btn.textContent === '✓') return;
+			btn.textContent = isComplete() ? btnLabel : chooseLabel;
+		}
+		if (hasConfigurator) {
+			btn.textContent = chooseLabel;
+			document.addEventListener('jpc:change', updateLabel);
+			if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', updateLabel);
+			else updateLabel();
+		}
 
 		var originalPrice = priceEl ? priceEl.innerHTML : '';
 		var originalThumb = thumbImg ? thumbImg.getAttribute('src') : '';
@@ -400,7 +425,7 @@ function aad_sticky_price_bar() {
 
 		function showAdded() {
 			btn.textContent = '✓';
-			setTimeout(function () { btn.textContent = btnLabel; }, 2000);
+			setTimeout(function () { btn.textContent = btnLabel; updateLabel(); }, 2000);
 		}
 
 		// Προσθήκη στο καλάθι χωρίς επαναφόρτωση της σελίδας
@@ -429,10 +454,18 @@ function aad_sticky_price_bar() {
 				});
 		}
 
-		// Configurator: έλεγχος επιλογών πριν το καλάθι. Αν λείπει κάτι, η σελίδα πηγαίνει
-		// στο πεδίο που λείπει (όπως το κανονικό κουμπί) και η μπάρα δεν στέλνει τίποτα.
+		// Configurator: αν λείπουν επιλογές, ομαλό scroll στο πρώτο πεδίο που λείπει, χωρίς
+		// κόκκινα περιγράμματα, και η μπάρα δεν στέλνει τίποτα. Αλλιώς οι επιλογές περνάνε
+		// στη φόρμα (JPCValidate) και ακολουθεί η προσθήκη στο καλάθι.
 		function configuratorReady() {
 			if (!hasConfigurator) return true;
+			if (window.JPCConfigurator) {
+				if (!window.JPCConfigurator.isComplete()) {
+					window.JPCConfigurator.reveal();
+					return false;
+				}
+				return window.JPCValidate();
+			}
 			if (typeof window.JPCValidate === 'function') return window.JPCValidate();
 			// Παλιά έκδοση plugin: άφησε το κανονικό κουμπί να κάνει τον έλεγχο.
 			var mainBtn = document.querySelector('form.cart .single_add_to_cart_button');

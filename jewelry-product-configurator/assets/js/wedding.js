@@ -153,6 +153,7 @@ jQuery(function ($) {
     return vals;
   }
   function syncFields() {
+    window.setTimeout(notifyChange, 0);
     const vals = values();
     // Also works when YOOtheme places the configurator outside form.cart.
     $('form.cart').each(function () {
@@ -166,6 +167,34 @@ jQuery(function ($) {
   }
 
   /* ---- Validation --------------------------------------------------- */
+  /**
+   * Missing choices, in page order: [{box: jQuery, ok: bool}], checks only (marks nothing).
+   * The first incomplete entry is where the customer still has to choose.
+   */
+  function fieldChecks() {
+    const vals = values();
+    const list = (sizes[vals.jcw_size_system] || []).map(s => s.v);
+    const result = [{box: $root.find('#jcw_option_box'), ok: optionProblem() === ''},
+      {box: $root.find('#jcw_system_row'), ok: vals.jcw_size_system === 'eu' || vals.jcw_size_system === 'us'}];
+    rings().forEach(function (ring) {
+      result.push({box: $root.find('#jcw_ring_' + ring + ' .jcw-color-row'), ok: !data.hasColors || colorOf(ring) !== ''});
+      result.push({box: $root.find('#jcw_ring_' + ring + ' .jcw-size-row'), ok: list.indexOf(sizeOf(ring)) !== -1});
+      result.push({box: $root.find('#jcw_ring_' + ring + ' .jcw-name'), ok: !engraves(ring) || (nameOf(ring) !== '' && nameOf(ring).length <= max)});
+    });
+    return result;
+  }
+  /** Tell other scripts (e.g. the sticky bar) that the choices changed. */
+  function notifyChange() {
+    document.dispatchEvent(new CustomEvent('jpc:change', {detail: {complete: fieldChecks().every(c => c.ok)}}));
+  }
+  /** Smooth scroll to a box and focus its first control, without marking anything. */
+  function revealBox($box) {
+    if (!$box || !$box.length) return;
+    const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({top: Math.max(0, window.scrollY + $box[0].getBoundingClientRect().top - 110), behavior: reducedMotion ? 'auto' : 'smooth'});
+    const $focus = $box.find('input:visible,select:visible').first();
+    if ($focus.length) window.setTimeout(function () { try { $focus[0].focus({preventScroll: true}); } catch (e) { /* no-op */ } }, reducedMotion ? 0 : 400);
+  }
   function validate() {
     const vals = values();
     const list = (sizes[vals.jcw_size_system] || []).map(s => s.v);
@@ -215,7 +244,7 @@ jQuery(function ($) {
   });
   $root.on('input change', '.jcw-name input', refresh);
   $root.on('change', 'input[name="jcw_system_ui"]', function () { $root.find('#jcw_system_row').removeClass('jcw-row-invalid'); populateSizes(); syncFields(); });
-  $root.on('change', '.jcw-size select', syncFields);
+  $root.on('change', '.jcw-size-row select', syncFields);
   $root.on('change', '.jcw-swatches input', function () {
     lastColorRing = $(this).closest('.jcw-ring').attr('data-ring') || '';
     $(this).closest('.jcw-color-row').removeClass('jcw-row-invalid');
@@ -231,6 +260,15 @@ jQuery(function ($) {
     if (validate()) return true;
     scrollToInvalid();
     return false;
+  };
+  /** Gentle helpers for other scripts: check without marking, and show the first missing field. */
+  window.JPCConfigurator = {
+    isComplete: function () { return fieldChecks().every(c => c.ok); },
+    reveal: function () {
+      const first = fieldChecks().find(c => !c.ok);
+      revealBox(first ? (first.box.closest('.jc-box').length && first.box.is(':hidden') ? first.box.closest('.jc-box') : first.box) : $root);
+    },
+    validate: window.JPCValidate
   };
   function guard(event) {
     syncFields();

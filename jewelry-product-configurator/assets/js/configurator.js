@@ -62,6 +62,7 @@ jQuery(function ($) {
   }
 
   function syncFields() {
+    window.setTimeout(notifyChange, 0);
     const vals = values();
     // Handle normal WooCommerce forms as well as YOOtheme layouts where
     // the configurator is not a descendant of form.cart.
@@ -258,6 +259,18 @@ jQuery(function ($) {
     shownGoldPhoto = show;
   }
 
+  /** Tell other scripts (e.g. the sticky bar) that the choices changed. */
+  function notifyChange() {
+    document.dispatchEvent(new CustomEvent('jpc:change', {detail: {complete: window.JPCConfigurator ? window.JPCConfigurator.isComplete() : false}}));
+  }
+  /** Smooth scroll to a box and focus its first control, without marking anything. */
+  function revealBox($box) {
+    if (!$box || !$box.length) return;
+    const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({top: Math.max(0, window.scrollY + $box[0].getBoundingClientRect().top - 110), behavior: reducedMotion ? 'auto' : 'smooth'});
+    const $focus = $box.find('input:visible,select:visible').first();
+    if ($focus.length) window.setTimeout(function () { try { $focus[0].focus({preventScroll: true}); } catch (e) { /* no-op */ } }, reducedMotion ? 0 : 400);
+  }
   function scrollToInvalidField() {
     const $first = $root.find('.jc-box.jc-invalid:visible').first();
     if (!$first.length) return;
@@ -275,15 +288,19 @@ jQuery(function ($) {
     }
   }
 
-  function validate() {
+  /** Box id → complete? In page order. Checks only; marks nothing. */
+  function fieldChecks() {
     const vals = values();
     const allowed = sizeValues(vals.jc_size_system);
-    const checks = {
+    return {
       jc_metal_box: $root.find('input[name="jc_metal_type_ui"]:checked').length === 1 && isAvailable(vals.jc_metal_type),
       jc_color_box: !hasColor || vals.jc_metal_type !== 'gold' || ['λευκόχρυσο', 'κίτρινο χρυσό'].includes(vals.jc_gold_color),
       jc_size_system_box: !hasSize || ['eu', 'us'].includes(vals.jc_size_system),
       jc_size_box: !hasSize || allowed.includes(vals.jc_ring_size)
     };
+  }
+  function validate() {
+    const checks = fieldChecks();
     Object.entries(checks).forEach(([id, ok]) => $root.find('#' + id).toggleClass('jc-invalid', !ok));
     $root.find('#jc_ring_size').toggleClass('jc-invalid-control', !checks.jc_size_box);
     return Object.values(checks).every(Boolean);
@@ -329,6 +346,15 @@ jQuery(function ($) {
     if (validate()) return true;
     scrollToInvalidField();
     return false;
+  };
+  /** Gentle helpers for other scripts: check without marking, and show the first missing field. */
+  window.JPCConfigurator = {
+    isComplete: function () { return Object.values(fieldChecks()).every(Boolean); },
+    reveal: function () {
+      const first = Object.keys(fieldChecks()).find(id => !fieldChecks()[id]);
+      revealBox(first ? $root.find('#' + first) : $root);
+    },
+    validate: window.JPCValidate
   };
 
   $(document).on('click', 'form.cart button.single_add_to_cart_button, form.cart button[name="add-to-cart"]', function (event) {
