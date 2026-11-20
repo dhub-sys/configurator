@@ -250,3 +250,7 @@ Version 1.5.0:
 - Wedding rings: "Χρυσός | 14K ▾" and "Νούμερο | … ▾" are one framed control each, like the
   EU / US buttons: fixed bold label on the left (rounded left corners), a divider, then the
   dropdown. A missing size turns the whole frame red.
+
+Version 1.5.1:
+- Wedding rings: the men's / women's prices next to the ticks use the same font as the pair
+  price (same size and colour, amount in bold). "μόνο σε ζευγάρι" stays plain text.

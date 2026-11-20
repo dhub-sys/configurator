@@ -410,3 +410,14 @@
 .jpc-wedding[data-jc-wedding="1"] .jcw-combo:has(.jc-invalid-control) {
   border: 2px solid #e10600;
 }
+
+/* Ring prices (Ανδρική / Γυναικεία) written like the pair price: same size and colour, amount in bold */
+.jpc-wedding[data-jc-wedding="1"] .jcw-choices .jc-metal-price,
+.jpc-wedding[data-jc-wedding="1"] .jcw-pair-note {
+  font-size: 0.9em;
+  opacity: 1;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-choices .jc-metal-price .woocommerce-Price-amount,
+.jpc-wedding[data-jc-wedding="1"] .jcw-pair-note strong {
+  font-weight: 700;
+}
