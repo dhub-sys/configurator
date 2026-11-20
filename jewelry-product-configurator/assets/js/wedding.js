@@ -73,6 +73,9 @@ jQuery(function ($) {
   function photoChoice() {
     const active = rings();
     const combos = data.comboImages || {};
+    // The main photo shows the product's starting colours: keep it while they are selected.
+    const defaults = data.defaultColors || {};
+    if (active.length && active.every(ring => defaults[ring] && colorOf(ring) === defaults[ring])) return null;
     if (active.length === 2 && colorOf('men') && colorOf('women')) {
       const pair = colorOf('men') + '|' + colorOf('women');
       if (combos[pair] && combos[pair].src) return {key: 'combo:' + pair, image: combos[pair]};

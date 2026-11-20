@@ -215,3 +215,10 @@ Version 1.4.5:
   .woocommerce-product-gallery element); and the new photo's real size was not passed on.
   Zoom and lightbox images are now left to their scripts, zoom is rebuilt from the new photo,
   and data-large_image_width/height are updated (and restored).
+
+Version 1.4.6:
+- Product > Βέρες > "Αρχικά χρώματα": the men's and women's colours shown in the main product
+  photo. They are preselected when the page opens, and while they stay selected the main
+  photo is shown. Only colours the product offers can be chosen.
+- Changing one ring's colour then shows the "Φωτογραφίες συνδυασμών" photo for that exact
+  combination when there is one; otherwise, as before, the photo of the colour chosen last.

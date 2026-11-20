@@ -24,6 +24,8 @@ final class JPC_Wedding {
     const PRODUCT_COLOR_IMAGES_KEY = '_jpc_w_color_images';
     /** Photos for a men's + women's colour combination: ['men_key|women_key' => attachment id]. */
     const PRODUCT_COMBO_IMAGES_KEY = '_jpc_w_combo_images';
+    /** Colours shown in the product's main photo: ['men' => key, 'women' => key], preselected. */
+    const PRODUCT_DEFAULT_COLORS_KEY = '_jpc_w_default_colors';
 
     const OPTION_LABELS = ['pair' => 'Ζευγάρι βερών (ανδρική + γυναικεία)', 'men' => 'Ανδρική βέρα', 'women' => 'Γυναικεία βέρα'];
     const RING_LABELS = ['men' => 'ανδρικής', 'women' => 'γυναικείας'];
@@ -221,8 +223,28 @@ final class JPC_Wedding {
             echo '<span class="jpc-media-preview" style="display:inline-block;margin-left:8px;vertical-align:middle">' . ($preview ? '<img src="' . esc_url($preview) . '" alt="" style="max-width:40px;height:auto;border:1px solid #ddd">' : '') . '</span></p>';
         }
         echo '</div>';
+        self::default_colors_panel($product);
         self::combo_images_panel($product);
         echo '</div>';
+    }
+    /** Stored starting colours, ['men' => key|'', 'women' => key|'']. */
+    public static function start_colors($product) {
+        $stored = $product ? $product->get_meta(self::PRODUCT_DEFAULT_COLORS_KEY, true) : [];
+        $stored = is_array($stored) ? $stored : [];
+        return ['men' => (string) ($stored['men'] ?? ''), 'women' => (string) ($stored['women'] ?? '')];
+    }
+    /** "Αρχικά χρώματα": the colours the main product photo shows, preselected on the page. */
+    private static function default_colors_panel($product) {
+        $defaults = self::start_colors($product);
+        $options = static function ($selected) {
+            $html = '<option value="">— κανένα —</option>';
+            foreach (self::colors() as $c) $html .= '<option value="' . esc_attr($c['key']) . '"' . selected($selected, $c['key'], false) . '>' . esc_html($c['name']) . '</option>';
+            return $html;
+        };
+        echo '<div class="options_group jpc-w-combos"><p class="form-field jpc-w-combo-row"><label>Αρχικά χρώματα</label>'
+            . '<span class="jpc-w-combo-part">Ανδρική <select name="jpc_w_default[men]" aria-label="Αρχικό χρώμα ανδρικής">' . $options($defaults['men']) . '</select></span>'
+            . '<span class="jpc-w-combo-part">+ Γυναικεία <select name="jpc_w_default[women]" aria-label="Αρχικό χρώμα γυναικείας">' . $options($defaults['women']) . '</select></span></p>'
+            . '<p class="form-field"><span class="description" style="margin-left:0">Τα χρώματα που φαίνονται στη <strong>βασική φωτογραφία</strong> του προϊόντος: η σελίδα ανοίγει με αυτά επιλεγμένα και, όσο μένουν αυτά, δείχνει τη βασική φωτογραφία. Πρέπει να είναι από τα διαθέσιμα χρώματα του προϊόντος.</span></p></div>';
     }
     /** "Φωτογραφίες συνδυασμών": men's colour + women's colour → photo. */
     private static function combo_images_panel($product) {
@@ -305,6 +327,15 @@ final class JPC_Wedding {
         }
         $product->update_meta_data(self::PRODUCT_COLORS_KEY, $chosen);
         $product->update_meta_data(self::PRODUCT_COLOR_IMAGES_KEY, $images);
+        if (isset($_POST['jpc_w_default']) && is_array($_POST['jpc_w_default'])) {
+            $default = [];
+            foreach (['men', 'women'] as $ring) {
+                $key = sanitize_key(wp_unslash($_POST['jpc_w_default'][$ring] ?? ''));
+                // Only a colour the product offers can be preselected.
+                $default[$ring] = in_array($key, $chosen, true) ? $key : '';
+            }
+            $product->update_meta_data(self::PRODUCT_DEFAULT_COLORS_KEY, $default);
+        }
         if (isset($_POST['jpc_w_combo']) && is_array($_POST['jpc_w_combo'])) {
             $combos = [];
             foreach (wp_unslash($_POST['jpc_w_combo']) as $row) {
@@ -378,6 +409,12 @@ final class JPC_Wedding {
         // Both rings ticked = the pair; a ring can be ticked alone only if it has its own price.
         $default = isset($prices['pair']) ? ['men', 'women'] : array_values(array_intersect(['men', 'women'], array_keys($prices)));
         $single_color = count($colors) === 1 ? $colors[0] : null;
+        // Preselected colour per ring: the product's "Αρχικά χρώματα", or the only colour.
+        $offered = array_column($colors, null, 'key');
+        $preselect = [];
+        foreach (self::start_colors($product) as $ring => $key) {
+            $preselect[$ring] = isset($offered[$key]) ? $offered[$key] : $single_color;
+        }
         ob_start(); ?>
         <div class="jpc-wedding jcw-compact" data-jc-wedding="1" data-jc-source="plugin-<?php echo esc_attr(JPC_Product_Configurator::VERSION); ?>" data-jc-sizes="<?php echo esc_attr(wp_json_encode($sizes)); ?>">
           <div class="jc-grid">
@@ -410,10 +447,10 @@ final class JPC_Wedding {
                 <span class="jcw-label">Χρώμα</span>
                 <div class="jcw-swatches" role="radiogroup" aria-label="Χρώμα <?php echo esc_attr(self::RING_LABELS[$ring]); ?>">
                   <?php foreach ($colors as $color) : ?>
-                    <label class="jcw-swatch" title="<?php echo esc_attr($color['name']); ?>"><input type="radio" name="jcw_color_<?php echo esc_attr($ring); ?>_ui" value="<?php echo esc_attr($color['key']); ?>" data-name="<?php echo esc_attr($color['name']); ?>"<?php checked($single_color !== null); ?> aria-label="<?php echo esc_attr($color['name']); ?>"><span class="jcw-swatch-tile" aria-hidden="true" style="background:<?php echo esc_attr(self::swatch_css($color)); ?>"></span></label>
+                    <label class="jcw-swatch" title="<?php echo esc_attr($color['name']); ?>"><input type="radio" name="jcw_color_<?php echo esc_attr($ring); ?>_ui" value="<?php echo esc_attr($color['key']); ?>" data-name="<?php echo esc_attr($color['name']); ?>"<?php checked($preselect[$ring] && $preselect[$ring]['key'] === $color['key']); ?> aria-label="<?php echo esc_attr($color['name']); ?>"><span class="jcw-swatch-tile" aria-hidden="true" style="background:<?php echo esc_attr(self::swatch_css($color)); ?>"></span></label>
                   <?php endforeach; ?>
                 </div>
-                <span class="jcw-color-name"><?php echo $single_color ? esc_html($single_color['name']) : ''; ?></span>
+                <span class="jcw-color-name"><?php echo $preselect[$ring] ? esc_html($preselect[$ring]['name']) : ''; ?></span>
               </div>
               <?php endif; ?>
               <div class="jcw-row jcw-size-row">
@@ -467,6 +504,8 @@ final class JPC_Wedding {
             'hasColors' => (bool) self::product_colors($product),
             'colorImages' => $color_images,
             'comboImages' => self::combo_image_data($product),
+            // The colours the main photo shows: while selected, the main photo stays.
+            'defaultColors' => self::start_colors($product),
             'mainImage' => JPC_Product_Configurator::attachment_image_data((int) $product->get_image_id(), true),
             'priceSelector' => '.jpc-live-price',
             'format' => [
