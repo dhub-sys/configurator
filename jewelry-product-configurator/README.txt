@@ -222,3 +222,10 @@ Version 1.4.6:
   photo is shown. Only colours the product offers can be chosen.
 - Changing one ring's colour then shows the "Φωτογραφίες συνδυασμών" photo for that exact
   combination when there is one; otherwise, as before, the photo of the colour chosen last.
+
+Version 1.4.7:
+- Solitaires (standard configurator), Product > General: "Αρχικό χρώμα χρυσού" (Λευκόχρυσο /
+  Κίτρινο χρυσό), the gold colour the main photo shows. It is preselected (Χρυσός + that
+  colour), selected again when returning to Χρυσός, and keeps the main photo while selected.
+- New optional "Εικόνα Λευκόχρυσου" next to "Εικόνα Κίτρινου Χρυσού", for products whose main
+  photo is yellow gold. Products without a starting colour behave exactly as before.

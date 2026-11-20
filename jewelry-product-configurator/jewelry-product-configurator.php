@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jewelry Product Configurator
  * Description: Επιλογή μετάλλου, χρώματος και μεγέθους δαχτυλιδιού για επιλεγμένες κατηγορίες WooCommerce, και configurator βερών (ζευγάρι/μονή, χρώμα, νούμερα, χάραξη).
- * Version: 1.4.6
+ * Version: 1.4.7
  * Requires Plugins: woocommerce
  * Requires PHP: 7.4
  * Author: Custom
@@ -14,7 +14,7 @@ final class JPC_Product_Configurator {
     const OPTION = 'jpc_category_ids';
     const PLACEMENT_OPTION = 'jpc_placement_mode';
     const FIELDS_OPTION = 'jpc_category_fields';
-    const VERSION = '1.4.6';
+    const VERSION = '1.4.7';
     private static $rendered = false;
 
     /** Alternative metals: one price meta per metal. Gold is the normal WooCommerce price. */
@@ -273,35 +273,60 @@ final class JPC_Product_Configurator {
     }
 
     /** Optional alternate main image used for Χρυσός → Κίτρινο χρυσό. */
+    /** Gold colours of the standard configurator, as stored in carts and orders. */
+    const GOLD_COLORS = ['λευκόχρυσο' => 'Λευκόχρυσο', 'κίτρινο χρυσό' => 'Κίτρινο χρυσό'];
+    /** Optional photo per gold colour (used when that colour is not the main photo's). */
+    const GOLD_IMAGE_KEYS = ['κίτρινο χρυσό' => '_jpc_yellow_gold_image_id', 'λευκόχρυσο' => '_jpc_white_gold_image_id'];
+    const DEFAULT_GOLD_COLOR_KEY = '_jpc_default_gold_color';
+
+    /** The gold colour the main product photo shows ('' = not set). */
+    public static function default_gold_color($product) {
+        $color = $product ? (string) $product->get_meta(self::DEFAULT_GOLD_COLOR_KEY, true) : '';
+        return isset(self::GOLD_COLORS[$color]) ? $color : '';
+    }
+    private static function image_picker_field($key, $label, $description, $product) {
+        $attachment_id = (int) $product->get_meta($key, true, 'edit');
+        $preview = $attachment_id ? wp_get_attachment_image_url($attachment_id, 'thumbnail') : '';
+        echo '<p class="form-field ' . esc_attr($key) . '_field">';
+        echo '<label for="' . esc_attr($key) . '">' . esc_html($label) . '</label>';
+        echo '<span class="wrap">';
+        echo '<input type="hidden" id="' . esc_attr($key) . '" name="' . esc_attr($key) . '" value="' . esc_attr($attachment_id ?: '') . '">';
+        echo '<button type="button" class="button jpc-media-select" data-target="#' . esc_attr($key) . '">' . esc_html__('Επιλογή εικόνας', 'jewelry-product-configurator') . '</button> ';
+        echo '<button type="button" class="button jpc-media-clear" data-target="#' . esc_attr($key) . '"' . ($attachment_id ? '' : ' style="display:none;"') . '>' . esc_html__('Καθαρισμός', 'jewelry-product-configurator') . '</button>';
+        echo '<span class="description" style="display:block;margin-top:6px;">' . esc_html($description) . '</span>';
+        echo '<span class="jpc-media-preview" style="display:block;margin-top:10px;">';
+        if ($preview) echo '<img src="' . esc_url($preview) . '" alt="" style="max-width:80px;height:auto;border:1px solid #ddd;padding:3px;background:#fff;">';
+        echo '</span></span></p>';
+    }
+    /** Product > General: starting gold colour and optional photo per gold colour. */
     public static function yellow_gold_image_admin_field() {
         global $product_object;
         if (!$product_object || !$product_object->is_type('simple')) return;
-        $attachment_id = (int) $product_object->get_meta('_jpc_yellow_gold_image_id', true, 'edit');
-        $preview = $attachment_id ? wp_get_attachment_image_url($attachment_id, 'thumbnail') : '';
         echo '<div class="options_group">';
-        echo '<p class="form-field _jpc_yellow_gold_image_id_field">';
-        echo '<label for="_jpc_yellow_gold_image_id">Εικόνα Κίτρινου Χρυσού</label>';
-        echo '<span class="wrap">';
-        echo '<input type="hidden" id="_jpc_yellow_gold_image_id" name="_jpc_yellow_gold_image_id" value="' . esc_attr($attachment_id) . '">';
-        echo '<button type="button" class="button jpc-media-select" data-target="#_jpc_yellow_gold_image_id">' . esc_html__('Επιλογή εικόνας', 'jewelry-product-configurator') . '</button> ';
-        echo '<button type="button" class="button jpc-media-clear" data-target="#_jpc_yellow_gold_image_id"' . ($attachment_id ? '' : ' style="display:none;"') . '>' . esc_html__('Καθαρισμός', 'jewelry-product-configurator') . '</button>';
-        echo '<span class="description" style="display:block;margin-top:6px;">Προαιρετική εικόνα που θα εμφανίζεται όταν ο πελάτης επιλέγει Χρυσός → Κίτρινο χρυσό. Αν μείνει κενή, χρησιμοποιείται η βασική εικόνα του προϊόντος.</span>';
-        echo '<span class="jpc-media-preview" style="display:block;margin-top:10px;">';
-        if ($preview) {
-            echo '<img src="' . esc_url($preview) . '" alt="" style="max-width:80px;height:auto;border:1px solid #ddd;padding:3px;background:#fff;">';
-        }
-        echo '</span>';
-        echo '</span>';
-        echo '</p>';
+        woocommerce_wp_select([
+            'id' => self::DEFAULT_GOLD_COLOR_KEY,
+            'label' => 'Αρχικό χρώμα χρυσού',
+            'options' => ['' => '— κανένα (ο πελάτης διαλέγει) —'] + self::GOLD_COLORS,
+            'value' => self::default_gold_color($product_object),
+            'desc_tip' => true,
+            'description' => 'Το χρώμα που φαίνεται στη βασική φωτογραφία. Η σελίδα ανοίγει με Χρυσός και αυτό το χρώμα επιλεγμένα, και όσο μένει αυτό φαίνεται η βασική φωτογραφία.',
+        ]);
+        self::image_picker_field('_jpc_yellow_gold_image_id', 'Εικόνα Κίτρινου Χρυσού', 'Προαιρετική: εμφανίζεται όταν ο πελάτης επιλέγει Κίτρινο χρυσό (αν η βασική φωτογραφία δεν είναι ήδη κίτρινη). Αν μείνει κενή, μένει η βασική εικόνα.', $product_object);
+        self::image_picker_field('_jpc_white_gold_image_id', 'Εικόνα Λευκόχρυσου', 'Προαιρετική: εμφανίζεται όταν ο πελάτης επιλέγει Λευκόχρυσο (χρήσιμη όταν η βασική φωτογραφία είναι κίτρινη). Αν μείνει κενή, μένει η βασική εικόνα.', $product_object);
         echo '</div>';
     }
     public static function save_yellow_gold_image_admin_field($product) {
         if (!$product || !$product->is_type('simple')) return;
-        $attachment_id = isset($_POST['_jpc_yellow_gold_image_id']) ? absint(wp_unslash($_POST['_jpc_yellow_gold_image_id'])) : 0;
-        if ($attachment_id > 0) {
-            $product->update_meta_data('_jpc_yellow_gold_image_id', $attachment_id);
-        } else {
-            $product->delete_meta_data('_jpc_yellow_gold_image_id');
+        foreach (self::GOLD_IMAGE_KEYS as $key) {
+            if (!array_key_exists($key, $_POST)) continue;
+            $attachment_id = absint(wp_unslash($_POST[$key]));
+            if ($attachment_id > 0) $product->update_meta_data($key, $attachment_id);
+            else $product->delete_meta_data($key);
+        }
+        if (array_key_exists(self::DEFAULT_GOLD_COLOR_KEY, $_POST) && is_scalar($_POST[self::DEFAULT_GOLD_COLOR_KEY])) {
+            $color = wp_unslash($_POST[self::DEFAULT_GOLD_COLOR_KEY]);
+            if (isset(self::GOLD_COLORS[$color])) $product->update_meta_data(self::DEFAULT_GOLD_COLOR_KEY, $color);
+            else $product->delete_meta_data(self::DEFAULT_GOLD_COLOR_KEY);
         }
     }
     private static function image_stems($attachment_id) {
@@ -316,6 +341,10 @@ final class JPC_Product_Configurator {
     private static function yellow_gold_image_data($product) {
         if (!$product || !$product->is_type('simple')) return [];
         return self::attachment_image_data((int) $product->get_meta('_jpc_yellow_gold_image_id', true));
+    }
+    private static function white_gold_image_data($product) {
+        if (!$product || !$product->is_type('simple')) return [];
+        return self::attachment_image_data((int) $product->get_meta('_jpc_white_gold_image_id', true));
     }
     /** Image URLs for the front-end image swap; with $stems, also the file stems used to find it in the gallery. */
     public static function attachment_image_data($attachment_id, $stems = false) {
@@ -776,6 +805,7 @@ final class JPC_Product_Configurator {
             $images = [
                 'default' => $primary_image,
                 'yellowGold' => self::yellow_gold_image_data($product),
+                'whiteGold' => self::white_gold_image_data($product),
             ];
         }
         if ($product && $product->is_type(['simple', 'variable'])) {
@@ -821,6 +851,8 @@ final class JPC_Product_Configurator {
                 'fields' => $fields,
                 // Diagnostics banner on the product page, only for shop managers.
                 'debug' => current_user_can('manage_woocommerce'),
+                // The gold colour the main photo shows: preselected, and keeps the main photo.
+                'defaultGoldColor' => self::default_gold_color($product),
                 'version' => self::VERSION,
                 'images' => $images ?? ['default' => [], 'yellowGold' => []],
             ]);
@@ -993,6 +1025,7 @@ final class JPC_Product_Configurator {
         $config_fields = self::category_fields(get_queried_object_id());
         $jpc_product = wc_get_product(get_queried_object_id());
         $table = $jpc_product ? self::price_table($jpc_product) : [];
+        $default_gold = self::default_gold_color($jpc_product);
         $show_prices = get_option(self::LABEL_PRICES_OPTION, 'yes') === 'yes';
         $sizes = [];
         foreach ($config_fields['sizes'] as $system => $values) {
@@ -1014,7 +1047,7 @@ final class JPC_Product_Configurator {
             <?php if ($config_fields['color']) : ?>
             <div id="jc_color_box" class="jc-box jc-box-half uk-card uk-card-conf uk-card-small uk-card-body uk-border-rounded" hidden>
               <h4 class="jc-box-title">Χρώμα Μετάλλου</h4>
-              <div class="jc-swatches" role="radiogroup" aria-label="Χρώμα Μετάλλου"><label class="jc-swatch jc-swatch-whitegold" aria-label="Λευκόχρυσο" title="Λευκόχρυσο"><input type="radio" name="jc_gold_color_ui" value="λευκόχρυσο"><span class="jc-swatch-tile" aria-hidden="true"></span></label><label class="jc-swatch jc-swatch-yellowgold" aria-label="Κίτρινο χρυσό" title="Κίτρινο χρυσό"><input type="radio" name="jc_gold_color_ui" value="κίτρινο χρυσό"><span class="jc-swatch-tile" aria-hidden="true"></span></label></div>
+              <div class="jc-swatches" role="radiogroup" aria-label="Χρώμα Μετάλλου"><label class="jc-swatch jc-swatch-whitegold" aria-label="Λευκόχρυσο" title="Λευκόχρυσο"><input type="radio" name="jc_gold_color_ui" value="λευκόχρυσο"<?php checked($default_gold, 'λευκόχρυσο'); ?>><span class="jc-swatch-tile" aria-hidden="true"></span></label><label class="jc-swatch jc-swatch-yellowgold" aria-label="Κίτρινο χρυσό" title="Κίτρινο χρυσό"><input type="radio" name="jc_gold_color_ui" value="κίτρινο χρυσό"<?php checked($default_gold, 'κίτρινο χρυσό'); ?>><span class="jc-swatch-tile" aria-hidden="true"></span></label></div>
             </div>
             <?php endif; ?>
             <?php if ($config_fields['size']) : ?>

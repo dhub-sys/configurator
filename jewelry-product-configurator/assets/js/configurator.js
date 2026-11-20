@@ -33,6 +33,11 @@ jQuery(function ($) {
     $root.find('#jc_color_box').prop('hidden', !gold).toggle(gold);
     $root.find('#jc_metal_box').toggleClass('jc-box-full', !gold).toggleClass('jc-box-half', gold);
     if (!gold) $root.find('input[name="jc_gold_color_ui"]').prop('checked', false);
+    // Back on gold with no colour chosen: preselect the product's starting colour again.
+    const startColor = (window.JPCPrices && window.JPCPrices.defaultGoldColor) || '';
+    if (gold && startColor && !selected('jc_gold_color_ui')) {
+      $root.find('input[name="jc_gold_color_ui"]').filter(function () { return this.value === startColor; }).prop('checked', true);
+    }
   }
 
   function populateSizes() {
@@ -235,17 +240,22 @@ jQuery(function ($) {
   // If no alternate image exists, keep the product's default visuals.
   const imageInfo = (priceInfo && priceInfo.images) || {};
   common.setMainImage(imageInfo.default);
-  let usingYellow = false;
+  // Photo per gold colour. The product's starting colour is the one its main photo shows,
+  // so it keeps the main photo; the other colour shows its own photo when there is one.
+  let shownGoldPhoto = '';
   function updateProductImage() {
     if (!imageInfo) return;
-    const shouldUseYellow = !!(hasColor && selected('jc_metal_type_ui') === 'gold' && selected('jc_gold_color_ui') === 'κίτρινο χρυσό' && imageInfo.yellowGold && imageInfo.yellowGold.src);
-    if (shouldUseYellow) {
-      const nodes = common.showImage(imageInfo.yellowGold);
-      if (nodes.length && !usingYellow) common.showMainSlide(nodes);
-    } else if (usingYellow) {
+    const color = hasColor && selected('jc_metal_type_ui') === 'gold' ? selected('jc_gold_color_ui') : '';
+    const startColor = (priceInfo && priceInfo.defaultGoldColor) || '';
+    const image = color === 'κίτρινο χρυσό' ? imageInfo.yellowGold : (color === 'λευκόχρυσο' ? imageInfo.whiteGold : null);
+    const show = color && color !== startColor && image && image.src ? color : '';
+    if (show) {
+      const nodes = common.showImage(image);
+      if (nodes.length && shownGoldPhoto !== show) common.showMainSlide(nodes);
+    } else if (shownGoldPhoto) {
       common.restoreImages();
     }
-    usingYellow = shouldUseYellow;
+    shownGoldPhoto = show;
   }
 
   function scrollToInvalidField() {
