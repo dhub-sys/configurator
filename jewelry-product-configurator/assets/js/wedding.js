@@ -188,11 +188,11 @@ jQuery(function ($) {
     document.dispatchEvent(new CustomEvent('jpc:change', {detail: {complete: fieldChecks().every(c => c.ok)}}));
   }
   /** Smooth scroll to a box and focus its first control, without marking anything. */
-  function revealBox($box) {
+  function revealBox($box, $focusIn) {
     if (!$box || !$box.length) return;
     const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({top: Math.max(0, window.scrollY + $box[0].getBoundingClientRect().top - 110), behavior: reducedMotion ? 'auto' : 'smooth'});
-    const $focus = $box.find('input:visible,select:visible').first();
+    window.scrollTo({top: Math.max(0, window.scrollY + $box[0].getBoundingClientRect().top - window.JPCCommon.scrollOffset()), behavior: reducedMotion ? 'auto' : 'smooth'});
+    const $focus = ($focusIn && $focusIn.length ? $focusIn : $box).find('input:visible,select:visible').first();
     if ($focus.length) window.setTimeout(function () { try { $focus[0].focus({preventScroll: true}); } catch (e) { /* no-op */ } }, reducedMotion ? 0 : 400);
   }
   function validate() {
@@ -218,7 +218,7 @@ jQuery(function ($) {
     const $first = $root.find('.jc-box.jc-invalid:visible').first();
     if (!$first.length) return;
     const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({top: Math.max(0, window.scrollY + $first[0].getBoundingClientRect().top - 110), behavior: reducedMotion ? 'auto' : 'smooth'});
+    window.scrollTo({top: Math.max(0, window.scrollY + $first[0].getBoundingClientRect().top - window.JPCCommon.scrollOffset()), behavior: reducedMotion ? 'auto' : 'smooth'});
     const $focus = $first.find('.jc-invalid-control:visible, input:visible, select:visible').first();
     if ($focus.length) window.setTimeout(function () { try { $focus[0].focus({preventScroll: true}); } catch (e) { /* no-op */ } }, reducedMotion ? 0 : 400);
   }
@@ -266,7 +266,8 @@ jQuery(function ($) {
     isComplete: function () { return fieldChecks().every(c => c.ok); },
     reveal: function () {
       const first = fieldChecks().find(c => !c.ok);
-      revealBox(first ? (first.box.closest('.jc-box').length && first.box.is(':hidden') ? first.box.closest('.jc-box') : first.box) : $root);
+      // Scroll to the top of the box holding the missing field, so its context shows too.
+      revealBox(first && first.box.closest('.jc-box').length ? first.box.closest('.jc-box') : $root, first ? first.box : null);
     },
     validate: window.JPCValidate
   };

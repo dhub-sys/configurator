@@ -275,3 +275,9 @@ Version 1.5.4:
   (the listener still pointed at the pre-1.3.9 markup).
 - snippets/aad-sticky-add-to-cart.php: "Επιλογή χαρακτηριστικών" until all choices are made,
   then "Προσθήκη στο καλάθι"; content centred.
+
+Version 1.5.5:
+- Scrolling to a missing field (sticky bar "Επιλογή χαρακτηριστικών" and the page's own add-
+  to-cart button) now leaves room for the site's sticky header: the offset is measured from the
+  YOOtheme header (.tm-header / .tm-header-mobile) plus 24px, instead of a fixed 110px. The
+  gentle reveal scrolls to the top of the box holding the missing field and focuses that field.

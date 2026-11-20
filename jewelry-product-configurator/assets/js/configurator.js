@@ -267,7 +267,7 @@ jQuery(function ($) {
   function revealBox($box) {
     if (!$box || !$box.length) return;
     const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({top: Math.max(0, window.scrollY + $box[0].getBoundingClientRect().top - 110), behavior: reducedMotion ? 'auto' : 'smooth'});
+    window.scrollTo({top: Math.max(0, window.scrollY + $box[0].getBoundingClientRect().top - window.JPCCommon.scrollOffset()), behavior: reducedMotion ? 'auto' : 'smooth'});
     const $focus = $box.find('input:visible,select:visible').first();
     if ($focus.length) window.setTimeout(function () { try { $focus[0].focus({preventScroll: true}); } catch (e) { /* no-op */ } }, reducedMotion ? 0 : 400);
   }
@@ -275,7 +275,7 @@ jQuery(function ($) {
     const $first = $root.find('.jc-box.jc-invalid:visible').first();
     if (!$first.length) return;
     const node = $first[0];
-    const top = Math.max(0, window.scrollY + node.getBoundingClientRect().top - 110);
+    const top = Math.max(0, window.scrollY + node.getBoundingClientRect().top - window.JPCCommon.scrollOffset());
     // Respect reduced-motion preferences while keeping the missing field visible.
     const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({top: top, behavior: reducedMotion ? 'auto' : 'smooth'});

@@ -281,7 +281,32 @@ window.JPCCommon = (function ($) {
     });
   }
 
+  /**
+   * Space to leave above a field when scrolling to it: the height of the site's fixed/sticky
+   * header (YOOtheme .tm-header / .tm-header-mobile, whichever is shown) plus a gap. A header
+   * that hides while scrolling down comes back when scrolling up, so it is measured even when
+   * it is out of view.
+   */
+  function scrollOffset() {
+    let header = 0;
+    document.querySelectorAll('.tm-header, .tm-header-mobile, header').forEach(function (el) {
+      if (!el.getClientRects().length) return; // not displayed (e.g. desktop header on mobile)
+      const sticky = el.matches('[uk-sticky], .uk-sticky') || el.querySelector('[uk-sticky], .uk-sticky, .uk-sticky-fixed') ||
+        ['fixed', 'sticky'].indexOf(getComputedStyle(el).position) !== -1;
+      if (sticky && el.offsetHeight < window.innerHeight / 2) header = Math.max(header, el.offsetHeight);
+    });
+    return header + 24;
+  }
+  /** Smooth scroll so that `el` sits just below the site header. */
+  function scrollToElement(el) {
+    if (!el) return;
+    const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({top: Math.max(0, window.scrollY + el.getBoundingClientRect().top - scrollOffset()), behavior: reducedMotion ? 'auto' : 'smooth'});
+  }
+
   return {
+    scrollOffset: scrollOffset,
+    scrollToElement: scrollToElement,
     amountsFromHtml: amountsFromHtml,
     setPrice: setPrice,
     locatePrices: function (customSelector) {
