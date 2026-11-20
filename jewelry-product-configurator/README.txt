@@ -258,3 +258,10 @@ Version 1.5.1:
 Version 1.5.2:
 - Wedding rings: "Ανδρική: 380,00 €" / "Γυναικεία: 300,00 €" written exactly like
   "Ζευγάρι: 680,00 €" (same size, colon instead of the dash, amount in bold).
+
+Version 1.5.3:
+- window.JPCValidate() for other scripts (e.g. a sticky add-to-cart bar): copies the
+  configurator's choices into the cart form and checks them; returns true when the form can
+  be sent, otherwise marks and scrolls to the missing field and returns false.
+  Used by snippets/aad-sticky-add-to-cart.php (Code Snippets), which sends all configurator
+  choices with its AJAX add-to-cart and mirrors the live configured price.

@@ -225,6 +225,13 @@ jQuery(function ($) {
     $(this).closest('.jc-box').removeClass('jc-invalid');
     $(this).removeClass('jc-invalid-control');
   });
+  /** For other scripts (e.g. a sticky add-to-cart bar): see configurator.js. */
+  window.JPCValidate = function () {
+    syncFields();
+    if (validate()) return true;
+    scrollToInvalid();
+    return false;
+  };
   function guard(event) {
     syncFields();
     if (!validate()) { event.preventDefault(); event.stopImmediatePropagation(); scrollToInvalid(); return false; }

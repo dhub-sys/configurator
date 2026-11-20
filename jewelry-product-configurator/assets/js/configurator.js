@@ -319,6 +319,18 @@ jQuery(function ($) {
     if (this.id === 'jc_ring_size') $(this).removeClass('jc-invalid-control');
   });
 
+  /**
+   * For other scripts (e.g. a sticky add-to-cart bar): copy the choices into the cart form and
+   * check them. Returns true when the form can be sent; otherwise marks the missing field,
+   * scrolls to it and returns false.
+   */
+  window.JPCValidate = function () {
+    syncFields();
+    if (validate()) return true;
+    scrollToInvalidField();
+    return false;
+  };
+
   $(document).on('click', 'form.cart button.single_add_to_cart_button, form.cart button[name="add-to-cart"]', function (event) {
     syncFields();
     if (!validate()) {event.preventDefault(); event.stopImmediatePropagation(); scrollToInvalidField(); return false;}
