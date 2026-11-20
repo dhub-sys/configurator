@@ -237,3 +237,11 @@ Version 1.4.8:
   follow it. Cart price, validation and the order's "Υλικό" use the chosen karat. Settings:
   "Υλικό 18K" text. Carts from before count as 14K.
 - Ring size (and karat) dropdowns: transparent background, border only.
+
+Version 1.4.9:
+- Wedding rings: 9K added next to 14K and 18K (Product > Βέρες > "Τιμές 9K"; settings
+  "Υλικό 9K"). The karat dropdown lists only karats the product has prices for (14K always),
+  in the order 9K, 14K, 18K, starting on 14K; it shows "Χρυσός" fixed on the left and only
+  the number in the dropdown. Orders still record the full material text.
+- Size and karat dropdowns styled like the EU / US buttons (thin grey border, 6px corners,
+  small text, compact height, no fill).

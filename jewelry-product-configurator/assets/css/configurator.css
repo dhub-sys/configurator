@@ -340,22 +340,35 @@
   border: 2px solid #e10600 !important;
 }
 
-/* Size and karat dropdowns: no fill, border only (the arrow image stays) */
+/* Size and karat dropdowns: same look as the EU / US buttons (thin grey border, 6px
+   corners, small text, compact height); no fill, the arrow image stays. */
 .jpc-wedding[data-jc-wedding="1"] .jcw-row select,
 .jpc-wedding[data-jc-wedding="1"] .jcw-karat select {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 4px 30px 4px 12px !important;
+  font-size: 0.85em !important;
+  line-height: 1.5 !important;
   background-color: transparent !important;
-  border: 1px solid rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 6px !important;
   box-shadow: none !important;
+  outline: none;
 }
-.jpc-wedding[data-jc-wedding="1"] .jcw-row select:focus,
-.jpc-wedding[data-jc-wedding="1"] .jcw-karat select:focus {
-  border-color: #111 !important;
+.jpc-wedding[data-jc-wedding="1"] .jcw-row select:focus-visible,
+.jpc-wedding[data-jc-wedding="1"] .jcw-karat select:focus-visible {
+  border-color: rgba(0, 0, 0, 0.5) !important;
 }
 .jpc-wedding[data-jc-wedding="1"] .jcw-karat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 0 auto;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-karat-word {
+  font-size: 0.85em;
 }
 .jpc-wedding[data-jc-wedding="1"] .jcw-karat select {
   width: auto;
-  min-width: 150px;
-  font-size: inherit;
+  min-width: 76px;
 }

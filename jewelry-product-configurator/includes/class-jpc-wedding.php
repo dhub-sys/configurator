@@ -20,9 +20,16 @@ final class JPC_Wedding {
     const ENGRAVE_FEE_OPTION = 'jpc_wedding_engrave_fee';
 
     const PRICE_KEYS = ['men' => '_jpc_w_price_men', 'women' => '_jpc_w_price_women'];
-    /** 18K prices (14K = the normal WooCommerce price for the pair + PRICE_KEYS). */
-    const PRICE_KEYS_18 = ['pair' => '_jpc_w18_price_pair', 'men' => '_jpc_w18_price_men', 'women' => '_jpc_w18_price_women'];
-    const MATERIAL_18_OPTION = 'jpc_wedding_material_18';
+    /**
+     * Extra karats with their own prices. 14K is the base: the normal WooCommerce price for
+     * the pair + PRICE_KEYS. Order here = order in the customer's dropdown.
+     */
+    const EXTRA_KARAT_PRICE_KEYS = [
+        '9'  => ['pair' => '_jpc_w9_price_pair', 'men' => '_jpc_w9_price_men', 'women' => '_jpc_w9_price_women'],
+        '18' => ['pair' => '_jpc_w18_price_pair', 'men' => '_jpc_w18_price_men', 'women' => '_jpc_w18_price_women'],
+    ];
+    const KARAT_ORDER = ['9', '14', '18'];
+    const MATERIAL_OPTIONS = ['9' => 'jpc_wedding_material_9', '14' => 'jpc_wedding_material', '18' => 'jpc_wedding_material_18'];
     const PRODUCT_COLORS_KEY = '_jpc_w_colors';
     const PRODUCT_COLOR_IMAGES_KEY = '_jpc_w_color_images';
     /** Photos for a men's + women's colour combination: ['men_key|women_key' => attachment id]. */
@@ -47,7 +54,8 @@ final class JPC_Wedding {
     public static function register_settings() {
         register_setting('jpc_settings', self::COLORS_OPTION, ['type' => 'array', 'sanitize_callback' => [__CLASS__, 'sanitize_colors'], 'default' => self::default_colors()]);
         register_setting('jpc_settings', self::MATERIAL_OPTION, ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'default' => 'Χρυσός 14K']);
-        register_setting('jpc_settings', self::MATERIAL_18_OPTION, ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'default' => 'Χρυσός 18K']);
+        register_setting('jpc_settings', self::MATERIAL_OPTIONS['18'], ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'default' => 'Χρυσός 18K']);
+        register_setting('jpc_settings', self::MATERIAL_OPTIONS['9'], ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'default' => 'Χρυσός 9K']);
         register_setting('jpc_settings', self::ENGRAVE_MAX_OPTION, ['type' => 'integer', 'sanitize_callback' => [__CLASS__, 'sanitize_max'], 'default' => 20]);
         register_setting('jpc_settings', self::ENGRAVE_FEE_OPTION, ['type' => 'string', 'sanitize_callback' => [__CLASS__, 'sanitize_fee'], 'default' => '']);
     }
@@ -134,11 +142,10 @@ final class JPC_Wedding {
         $fee = get_option(self::ENGRAVE_FEE_OPTION, '');
         return is_numeric($fee) && (float) $fee > 0 ? (float) $fee : 0.0;
     }
-    /** Material text for a karat ('14' or '18'), shown to the customer and on orders. */
+    /** Material text for a karat ('9', '14' or '18'), shown to the customer and on orders. */
     public static function material($karat = '14') {
-        return $karat === '18'
-            ? (string) get_option(self::MATERIAL_18_OPTION, 'Χρυσός 18K')
-            : (string) get_option(self::MATERIAL_OPTION, 'Χρυσός 14K');
+        $karat = isset(self::MATERIAL_OPTIONS[$karat]) ? $karat : '14';
+        return (string) get_option(self::MATERIAL_OPTIONS[$karat], 'Χρυσός ' . $karat . 'K');
     }
     /** Section printed inside the plugin's settings form. */
     public static function settings_section() {
@@ -147,7 +154,9 @@ final class JPC_Wedding {
         echo '<p>Ισχύουν για κατηγορίες με Τύπο «Βέρες» στον πίνακα παραπάνω. Σε κάθε προϊόν, στην καρτέλα «Βέρες», ορίζετε τιμές ανδρικής/γυναικείας και ποια χρώματα διαθέτει.</p>';
         echo '<table class="form-table"><tbody>';
         echo '<tr><th scope="row"><label for="jpc_w_material">Υλικό</label></th><td><input type="text" id="jpc_w_material" class="regular-text" name="' . esc_attr(self::MATERIAL_OPTION) . '" value="' . esc_attr(self::material()) . '"><p class="description">Εμφανίζεται στον πελάτη και στην παραγγελία (π.χ. «Χρυσός 14K»).</p></td></tr>';
-        echo '<tr><th scope="row"><label for="jpc_w_material_18">Υλικό 18K</label></th><td><input type="text" id="jpc_w_material_18" class="regular-text" name="' . esc_attr(self::MATERIAL_18_OPTION) . '" value="' . esc_attr(self::material('18')) . '"><p class="description">Για προϊόντα που έχουν και τιμές 18K: ο πελάτης διαλέγει ανάμεσα σε αυτό και στο παραπάνω.</p></td></tr>';
+        foreach (['9', '18'] as $karat) {
+            echo '<tr><th scope="row"><label for="jpc_w_material_' . $karat . '">Υλικό ' . $karat . 'K</label></th><td><input type="text" id="jpc_w_material_' . $karat . '" class="regular-text" name="' . esc_attr(self::MATERIAL_OPTIONS[$karat]) . '" value="' . esc_attr(self::material($karat)) . '"><p class="description">Για προϊόντα που έχουν και τιμές ' . $karat . 'K: ο πελάτης διαλέγει καράτια από dropdown.</p></td></tr>';
+        }
         echo '<tr><th scope="row"><label for="jpc_w_max">Χάραξη: μέγιστοι χαρακτήρες</label></th><td><input type="number" min="1" max="100" id="jpc_w_max" name="' . esc_attr(self::ENGRAVE_MAX_OPTION) . '" value="' . esc_attr(self::engrave_max()) . '" style="width:80px"></td></tr>';
         echo '<tr><th scope="row"><label for="jpc_w_fee">Χάραξη: χρέωση ανά βέρα (' . esc_html(get_woocommerce_currency_symbol()) . ')</label></th><td><input type="text" id="jpc_w_fee" name="' . esc_attr(self::ENGRAVE_FEE_OPTION) . '" value="' . esc_attr(get_option(self::ENGRAVE_FEE_OPTION, '')) . '" placeholder="Δωρεάν" style="width:100px"><p class="description">Κενό = δωρεάν χάραξη.</p></td></tr>';
         echo '</tbody></table>';
@@ -215,15 +224,17 @@ final class JPC_Wedding {
                 'value' => $product ? $product->get_meta($key, true, 'edit') : '',
             ]);
         }
-        echo '</div><div class="options_group"><p class="form-field"><span class="description" style="margin-left:0"><strong>Τιμές 18K</strong> (προαιρετικά): αν συμπληρωθούν, ο πελάτης διαλέγει 14K ή 18K. Κενή τιμή = δεν διατίθεται σε 18K (για μεμονωμένες: μόνο σε ζευγάρι).</span></p>';
-        foreach (self::PRICE_KEYS_18 as $what => $key) {
-            woocommerce_wp_text_input([
-                'id' => $key,
-                'label' => ($what === 'pair' ? 'Τιμή ζευγαριού 18K' : 'Τιμή μόνο ' . self::RING_LABELS[$what] . ' 18K') . ' (' . get_woocommerce_currency_symbol() . ')',
-                'placeholder' => $what === 'pair' ? 'Δεν διατίθεται σε 18K' : 'Δεν πωλείται μόνη',
-                'data_type' => 'price',
-                'value' => $product ? $product->get_meta($key, true, 'edit') : '',
-            ]);
+        foreach (self::EXTRA_KARAT_PRICE_KEYS as $karat => $keys) {
+            echo '</div><div class="options_group"><p class="form-field"><span class="description" style="margin-left:0"><strong>Τιμές ' . $karat . 'K</strong> (προαιρετικά): αν συμπληρωθούν, ο πελάτης μπορεί να διαλέξει ' . $karat . 'K. Κενή τιμή = δεν διατίθεται σε ' . $karat . 'K (για μεμονωμένες: μόνο σε ζευγάρι).</span></p>';
+            foreach ($keys as $what => $key) {
+                woocommerce_wp_text_input([
+                    'id' => $key,
+                    'label' => ($what === 'pair' ? 'Τιμή ζευγαριού ' . $karat . 'K' : 'Τιμή μόνο ' . self::RING_LABELS[$what] . ' ' . $karat . 'K') . ' (' . get_woocommerce_currency_symbol() . ')',
+                    'placeholder' => $what === 'pair' ? 'Δεν διατίθεται σε ' . $karat . 'K' : 'Δεν πωλείται μόνη',
+                    'data_type' => 'price',
+                    'value' => $product ? $product->get_meta($key, true, 'edit') : '',
+                ]);
+            }
         }
         echo '</div><div class="options_group"><p class="form-field"><label>Διαθέσιμα χρώματα</label><span class="description" style="display:block">Τσεκάρετε τα χρώματα του σχεδίου. Προαιρετικά, φωτογραφία ανά χρώμα: εμφανίζεται στη θέση της βασικής φωτογραφίας όταν ο πελάτης το επιλέγει. Κανένα χρώμα = δεν εμφανίζεται επιλογή χρώματος. Νέα χρώματα και σειρά: <a href="' . esc_url(admin_url('admin.php?page=jpc-settings#jpc_w_colors')) . '" target="_blank">WooCommerce → Jewelry Configurator → Χρώματα βερών</a>.</span></p>';
         $selected = $product ? (array) $product->get_meta(self::PRODUCT_COLORS_KEY, true, 'edit') : [];
@@ -324,7 +335,9 @@ final class JPC_Wedding {
     }
     public static function save_product($product) {
         if (!$product || !$product->is_type('simple')) return;
-        foreach (array_merge(array_values(self::PRICE_KEYS), array_values(self::PRICE_KEYS_18)) as $key) {
+        $keys = array_values(self::PRICE_KEYS);
+        foreach (self::EXTRA_KARAT_PRICE_KEYS as $karat_keys) $keys = array_merge($keys, array_values($karat_keys));
+        foreach ($keys as $key) {
             if (!array_key_exists($key, $_POST) || !is_scalar($_POST[$key])) continue;
             $raw = trim((string) wc_clean(wp_unslash($_POST[$key])));
             $decimal = $raw === '' ? '' : wc_format_decimal($raw);
@@ -380,8 +393,8 @@ final class JPC_Wedding {
     public static function prices($product, $karat = '14') {
         $prices = [];
         if (!$product || !$product->is_type('simple')) return $prices;
-        if ($karat === '18') {
-            foreach (self::PRICE_KEYS_18 as $what => $key) {
+        if (isset(self::EXTRA_KARAT_PRICE_KEYS[$karat])) {
+            foreach (self::EXTRA_KARAT_PRICE_KEYS[$karat] as $what => $key) {
                 $value = $product->get_meta($key, true, 'edit');
                 if (is_numeric($value) && (float) $value > 0) $prices[$what] = (float) $value;
             }
@@ -410,14 +423,18 @@ final class JPC_Wedding {
     public static function rings($option) {
         return $option === 'pair' ? ['men', 'women'] : [$option];
     }
-    /** Karats the product is sold in: always 14K, plus 18K when it has 18K prices. */
+    /** Karats the product is sold in, in dropdown order: always 14K, plus 9K/18K with prices. */
     public static function karats($product) {
-        return self::prices($product, '18') ? ['14', '18'] : ['14'];
+        return array_values(array_filter(self::KARAT_ORDER, static function ($karat) use ($product) {
+            return $karat === '14' || self::prices($product, $karat);
+        }));
     }
     /** Lowest display price (for "Από X €" in listings), or null. */
     public static function lowest_display_price($product) {
         $prices = self::prices($product) + [];
-        foreach (self::prices($product, '18') as $price) $prices[] = $price;
+        foreach (array_keys(self::EXTRA_KARAT_PRICE_KEYS) as $karat) {
+            foreach (self::prices($product, $karat) as $price) $prices[] = $price;
+        }
         return $prices ? (float) wc_get_price_to_display($product, ['price' => min($prices)]) : null;
     }
 
@@ -426,8 +443,9 @@ final class JPC_Wedding {
      * ------------------------------------------------------------------ */
     public static function render($product) {
         $prices = self::prices($product);
-        $prices18 = self::prices($product, '18');
         $karats = self::karats($product);
+        $other_prices = [];
+        foreach ($karats as $karat) if ($karat !== '14') $other_prices += self::prices($product, $karat);
         $colors = self::product_colors($product);
         $fields = JPC_Product_Configurator::category_fields($product->get_id());
         $sizes = [];
@@ -456,7 +474,7 @@ final class JPC_Wedding {
                 <div class="jcw-choices">
                   <?php foreach (['men' => 'Ανδρική', 'women' => 'Γυναικεία'] as $ring => $label) :
                     $alone = isset($prices[$ring]);
-                    if (!$alone && !isset($prices['pair']) && !isset($prices18[$ring]) && !isset($prices18['pair'])) continue; ?>
+                    if (!$alone && !isset($prices['pair']) && !isset($other_prices[$ring]) && !isset($other_prices['pair'])) continue; ?>
                     <label class="jc-radio-option"><input type="checkbox" name="jcw_ring_ui" value="<?php echo esc_attr($ring); ?>"<?php checked(in_array($ring, $default, true)); ?>><span><?php echo esc_html($label); ?></span><span class="jc-metal-price"><?php echo $alone ? $price_html($prices[$ring]) : 'μόνο σε ζευγάρι'; ?></span></label>
                   <?php endforeach; ?>
                   <?php if (isset($prices['pair'])) : ?><span class="jcw-pair-note">Ζευγάρι: <strong><?php echo $price_html($prices['pair']); ?></strong></span><?php endif; ?>
@@ -469,8 +487,8 @@ final class JPC_Wedding {
                   <label><input type="radio" name="jcw_system_ui" value="eu"><span>Ευρωπαϊκά</span></label><label><input type="radio" name="jcw_system_ui" value="us"><span>Αμερικάνικα</span></label>
                 </div>
                 <?php if (count($karats) > 1) : ?>
-                  <label class="jcw-karat"><select id="jcw_karat" class="jc-control uk-select" aria-label="Καράτια">
-                    <?php foreach ($karats as $karat) : ?><option value="<?php echo esc_attr($karat); ?>"><?php echo esc_html(self::material($karat)); ?></option><?php endforeach; ?>
+                  <label class="jcw-karat"><span class="jcw-karat-word">Χρυσός</span><select id="jcw_karat" class="jc-control uk-select" aria-label="Καράτια χρυσού">
+                    <?php foreach ($karats as $karat) : // only karats the product has prices for ?><option value="<?php echo esc_attr($karat); ?>"<?php selected($karat, '14'); ?>><?php echo esc_html($karat . 'K'); ?></option><?php endforeach; ?>
                   </select></label>
                 <?php elseif (self::material() !== '') : ?><span class="jcw-material"><?php echo esc_html(self::material()); ?></span><?php endif; ?>
               </div>
@@ -572,7 +590,7 @@ final class JPC_Wedding {
     }
     public static function selection() {
         $karat = self::posted('jcw_karat');
-        return ['karat' => $karat === '18' ? '18' : '14', 'option' => self::posted('jcw_option'), 'color_men' => sanitize_key(self::posted('jcw_color_men')), 'color_women' => sanitize_key(self::posted('jcw_color_women')), 'size_system' => self::posted('jcw_size_system'),
+        return ['karat' => in_array($karat, self::KARAT_ORDER, true) ? $karat : '14', 'option' => self::posted('jcw_option'), 'color_men' => sanitize_key(self::posted('jcw_color_men')), 'color_women' => sanitize_key(self::posted('jcw_color_women')), 'size_system' => self::posted('jcw_size_system'),
             'size_men' => self::posted('jcw_size_men'), 'size_women' => self::posted('jcw_size_women'),
             'engrave_men' => self::posted('jcw_engrave_men') === '1', 'engrave_women' => self::posted('jcw_engrave_women') === '1',
             'name_men' => self::posted('jcw_name_men'), 'name_women' => self::posted('jcw_name_women')];
