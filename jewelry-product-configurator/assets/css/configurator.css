@@ -339,3 +339,23 @@
 .jpc-wedding[data-jc-wedding="1"] .jcw-ring .jc-invalid-control {
   border: 2px solid #e10600 !important;
 }
+
+/* Size and karat dropdowns: no fill, border only (the arrow image stays) */
+.jpc-wedding[data-jc-wedding="1"] .jcw-row select,
+.jpc-wedding[data-jc-wedding="1"] .jcw-karat select {
+  background-color: transparent !important;
+  border: 1px solid rgba(0, 0, 0, 0.3) !important;
+  box-shadow: none !important;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-row select:focus,
+.jpc-wedding[data-jc-wedding="1"] .jcw-karat select:focus {
+  border-color: #111 !important;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-karat {
+  margin: 0 0 0 auto;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-karat select {
+  width: auto;
+  min-width: 150px;
+  font-size: inherit;
+}

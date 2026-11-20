@@ -6,7 +6,10 @@ jQuery(function ($) {
   if (!$root.length) return;
   const data = window.JPCWedding || {};
   const common = window.JPCCommon;
-  const prices = data.prices || {};
+  // Display prices per karat; the shown set follows the karat dropdown (14K when there is none).
+  const pricesByKarat = data.pricesByKarat || {'14': data.prices || {}};
+  const karat = () => String($root.find('#jcw_karat').val() || '14');
+  const currentPrices = () => pricesByKarat[karat()] || {};
   const fee = Number(data.engraveFee) || 0;
   const max = Number(data.engraveMax) || 20;
   const RINGS = ['men', 'women'];
@@ -17,7 +20,7 @@ jQuery(function ($) {
     } catch (e) { /* fall through */ }
     return {eu: [], us: []};
   })();
-  const fieldNames = ['jcw_option', 'jcw_color_men', 'jcw_color_women', 'jcw_size_system', 'jcw_size_men', 'jcw_size_women',
+  const fieldNames = ['jcw_karat', 'jcw_option', 'jcw_color_men', 'jcw_color_women', 'jcw_size_system', 'jcw_size_men', 'jcw_size_women',
     'jcw_engrave_men', 'jcw_engrave_women', 'jcw_name_men', 'jcw_name_women'];
 
   const checkedVal = name => $root.find('input[name="' + name + '"]:checked').val() || '';
@@ -34,7 +37,7 @@ jQuery(function ($) {
   function optionProblem() {
     const opt = option();
     if (!opt) return 'Επιλέξτε ανδρική, γυναικεία ή και τις δύο βέρες.';
-    if (prices[opt] !== undefined) return '';
+    if (currentPrices()[opt] !== undefined) return '';
     if (opt === 'pair') return 'Το ζευγάρι δεν διατίθεται.';
     return 'Η ' + (opt === 'men' ? 'ανδρική' : 'γυναικεία') + ' βέρα πωλείται μόνο σε ζευγάρι. Τσεκάρετε και την ' + (opt === 'men' ? 'γυναικεία' : 'ανδρική') + '.';
   }
@@ -54,10 +57,12 @@ jQuery(function ($) {
   }
   function updatePrice() {
     const opt = option();
+    const prices = currentPrices();
     if (prices[opt] === undefined) return; // keep the last valid price; the message explains
     const extra = fee * engravedCount();
     // The page's own price IS the pair price: restore it untouched (keeps a real sale display).
-    const html = opt === 'pair' && extra === 0 ? null : priceHtml(prices[opt] + extra);
+    // The page's own price is the 14K pair price.
+    const html = karat() === '14' && opt === 'pair' && extra === 0 ? null : priceHtml(prices[opt] + extra);
     common.locatePrices(data.priceSelector).each(function () { common.setPrice(this, html); });
   }
 
@@ -136,7 +141,7 @@ jQuery(function ($) {
   /* ---- Hidden fields for the cart form ------------------------------ */
   function values() {
     const active = rings();
-    const vals = {jcw_option: option(), jcw_size_system: checkedVal('jcw_system_ui')};
+    const vals = {jcw_karat: karat(), jcw_option: option(), jcw_size_system: checkedVal('jcw_system_ui')};
     RINGS.forEach(function (ring) {
       const on = active.indexOf(ring) !== -1;
       const engrave = on && engraves(ring);
@@ -190,8 +195,20 @@ jQuery(function ($) {
   }
 
   /* ---- Events ------------------------------------------------------- */
+  /** Prices next to the ring ticks and the pair price, for the chosen karat. */
+  function updateOptionPrices() {
+    const prices = currentPrices();
+    $root.find('input[name="jcw_ring_ui"]').each(function () {
+      const ring = this.value;
+      $(this).closest('label').find('.jc-metal-price').html(prices[ring] !== undefined ? priceHtml(prices[ring]) : 'μόνο σε ζευγάρι');
+    });
+    const $pair = $root.find('.jcw-pair-note');
+    if (prices.pair !== undefined) $pair.prop('hidden', false).find('strong').html(priceHtml(prices.pair));
+    else $pair.prop('hidden', true);
+  }
   function refresh() { updateVisibility(); updateCounters(); syncFields(); updatePrice(); }
   $root.on('change', 'input[name="jcw_ring_ui"], .jcw-engrave-toggle input', refresh);
+  $root.on('change', '#jcw_karat', function () { updateOptionPrices(); refresh(); });
   $root.on('change', 'input[name="jcw_ring_ui"]', updateImage);
   $root.on('change', '.jcw-engrave-toggle input', function () {
     if (this.checked) $(this).closest('.jcw-ring').find('.jcw-name input').trigger('focus');

@@ -229,3 +229,11 @@ Version 1.4.7:
   colour), selected again when returning to Χρυσός, and keeps the main photo while selected.
 - New optional "Εικόνα Λευκόχρυσου" next to "Εικόνα Κίτρινου Χρυσού", for products whose main
   photo is yellow gold. Products without a starting colour behave exactly as before.
+
+Version 1.4.8:
+- Wedding rings in 14K and 18K. Product > Βέρες > "Τιμές 18K": pair, men's only, women's only
+  (empty = not in 18K / single ring not sold alone in 18K). When a product has 18K prices the
+  customer gets a dropdown (Χρυσός 14K / Χρυσός 18K) in place of the material text; all prices
+  follow it. Cart price, validation and the order's "Υλικό" use the chosen karat. Settings:
+  "Υλικό 18K" text. Carts from before count as 14K.
+- Ring size (and karat) dropdowns: transparent background, border only.
