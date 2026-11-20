@@ -487,7 +487,7 @@ final class JPC_Wedding {
                   <label><input type="radio" name="jcw_system_ui" value="eu"><span>Ευρωπαϊκά</span></label><label><input type="radio" name="jcw_system_ui" value="us"><span>Αμερικάνικα</span></label>
                 </div>
                 <?php if (count($karats) > 1) : ?>
-                  <label class="jcw-karat"><span class="jcw-karat-word">Χρυσός</span><select id="jcw_karat" class="jc-control uk-select" aria-label="Καράτια χρυσού">
+                  <label class="jcw-combo jcw-karat"><span class="jcw-combo-label">Χρυσός</span><select id="jcw_karat" class="jc-control uk-select" aria-label="Καράτια χρυσού">
                     <?php foreach ($karats as $karat) : // only karats the product has prices for ?><option value="<?php echo esc_attr($karat); ?>"<?php selected($karat, '14'); ?>><?php echo esc_html($karat . 'K'); ?></option><?php endforeach; ?>
                   </select></label>
                 <?php elseif (self::material() !== '') : ?><span class="jcw-material"><?php echo esc_html(self::material()); ?></span><?php endif; ?>
@@ -508,8 +508,7 @@ final class JPC_Wedding {
               </div>
               <?php endif; ?>
               <div class="jcw-row jcw-size-row">
-                <label class="jcw-label" for="jcw_size_<?php echo esc_attr($ring); ?>">Νούμερο</label>
-                <select id="jcw_size_<?php echo esc_attr($ring); ?>" class="jc-control uk-select"><option value="">Επιλέξτε τύπο μεγέθους</option></select>
+                <label class="jcw-combo" for="jcw_size_<?php echo esc_attr($ring); ?>"><span class="jcw-combo-label">Νούμερο</span><select id="jcw_size_<?php echo esc_attr($ring); ?>" class="jc-control uk-select"><option value="">Επιλέξτε τύπο μεγέθους</option></select></label>
               </div>
               <div class="jcw-row">
                 <label class="jc-radio-option jcw-engrave-toggle"><input type="checkbox" id="jcw_engrave_<?php echo esc_attr($ring); ?>"><span>Χάραξη ονόματος<?php if ($fee > 0) echo ' <small>(+' . $price_html($fee) . ')</small>'; ?></span></label>

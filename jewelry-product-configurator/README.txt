@@ -245,3 +245,8 @@ Version 1.4.9:
   the number in the dropdown. Orders still record the full material text.
 - Size and karat dropdowns styled like the EU / US buttons (thin grey border, 6px corners,
   small text, compact height, no fill).
+
+Version 1.5.0:
+- Wedding rings: "Χρυσός | 14K ▾" and "Νούμερο | … ▾" are one framed control each, like the
+  EU / US buttons: fixed bold label on the left (rounded left corners), a divider, then the
+  dropdown. A missing size turns the whole frame red.

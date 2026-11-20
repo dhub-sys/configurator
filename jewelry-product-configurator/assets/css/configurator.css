@@ -365,10 +365,48 @@
   gap: 8px;
   margin: 0 0 0 auto;
 }
-.jpc-wedding[data-jc-wedding="1"] .jcw-karat-word {
-  font-size: 0.85em;
-}
 .jpc-wedding[data-jc-wedding="1"] .jcw-karat select {
   width: auto;
   min-width: 76px;
+}
+
+/* "Χρυσός | 14K ▾" and "Νούμερο | … ▾": one framed control like the EU / US buttons,
+   fixed bold label on the left, divider, then the dropdown without its own frame. */
+.jpc-wedding[data-jc-wedding="1"] .jcw-combo {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-karat.jcw-combo {
+  margin-left: auto;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-combo-label {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+  border-right: 1px solid rgba(0, 0, 0, 0.2);
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-combo select,
+.jpc-wedding[data-jc-wedding="1"] .jcw-row .jcw-combo select {
+  flex: 1 1 auto;
+  max-width: none;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-combo:focus-within {
+  border-color: rgba(0, 0, 0, 0.5);
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-size-row .jcw-combo {
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+.jpc-wedding[data-jc-wedding="1"] .jcw-combo:has(.jc-invalid-control) {
+  border: 2px solid #e10600;
 }
